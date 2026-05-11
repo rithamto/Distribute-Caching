@@ -15,254 +15,132 @@
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 \usepackage{natbib}
 
-\title{Tối ưu Cache và Phân phối Dữ liệu trong Kiến trúc Máy tính Hiện đại}
-\author{Sinh viên}
+\title{Các Phương pháp Tối ưu hóa Cache }
+\author{Nhóm nghiên cứu: [Tên thành viên 1, 2, 3, 4]}
 \date{\today}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Cache là một trong những thành phần quan trọng nhất trong kiến trúc máy tính hiện đại. Bài tiểu luận này tập trung vào việc phân tích các nguyên lý cơ bản, cấu trúc, và các kỹ thuật tối ưu hóa cache để cải thiện hiệu suất hệ thống máy tính. Chúng ta sẽ khám phá các phương pháp ánh xạ dữ liệu, phân loại các lỗi truy cập, thuật toán thay thế, chính sách ghi dữ liệu, và các kỹ thuật tối ưu hóa nâng cao. Cuối cùng, bài viết sẽ đề cập đến vấn đề nhất quán cache trong các hệ thống đa bộ xử lý. Mục đích là giúp người đọc hiểu rõ hơn về cách thức hoạt động của cache và tầm quan trọng của nó trong việc giảm độ trễ truy cập bộ nhớ.
+Cache đóng vai trò then chốt trong việc thu hẹp khoảng cách hiệu suất giữa bộ xử lý và bộ nhớ chính. Trong kỷ nguyên dữ liệu lớn và tính toán hiệu năng cao, việc tối ưu hóa cache không chỉ dừng lại ở các tầng phần cứng gần CPU mà còn mở rộng ra các kỹ thuật quản lý bộ nhớ ảo và dự đoán dữ liệu. Bài tiểu luận này trình bày kết quả nghiên cứu của nhóm về bốn phương pháp tối ưu hóa cache quan trọng: (1) Sử dụng bộ nhớ ảo để mở rộng dung lượng RAM, (2) Kiến trúc cache đa cấp, (3) Kỹ thuật nạp trước (Precaching), và (4) [Chủ đề phần 4]. Mục tiêu của nghiên cứu là phân tích cơ chế hoạt động, ưu điểm và thách thức của từng phương pháp trong việc cải thiện tổng thể hiệu năng hệ thống.
 \end{abstract}
 
 \section{Giới thiệu}
 
-Trong những năm gần đây, sự phát triển của công nghệ bán dẫn đã dẫn đến sự gia tăng nhanh chóng về tốc độ xử lý của bộ xử lý. Tuy nhiên, tốc độ truy cập bộ nhớ chính (DRAM) không tăng với tốc độ tương tự, tạo ra một ``khoảng cách hiệu suất'' (performance gap) lớn. Để giải quyết vấn đề này, các hệ thống máy tính hiện đại sử dụng \textbf{Cache}---một bộ nhớ nhỏ nhưng nhanh chóng nằm giữa bộ xử lý và bộ nhớ chính.
+Trong kiến trúc máy tính hiện đại, bộ nhớ cache là một thành phần không thể thiếu nhằm giải quyết vấn đề "bức tường bộ nhớ" (memory wall) - hiện tượng tốc độ của bộ xử lý (CPU) tăng trưởng nhanh hơn nhiều so với tốc độ truy cập bộ nhớ chính (DRAM). Một hệ thống cache hiệu quả có thể giảm thiểu độ trễ truy cập, tăng băng thông dữ liệu và tối ưu hóa mức tiêu thụ năng lượng.
 
-\subsection{Ví dụ về hiệu suất Cache}
+Nhóm nghiên cứu của chúng tôi tập trung vào bốn khía cạnh tối ưu hóa khác nhau, từ mức độ hệ điều hành đến mức độ phần cứng vi kiến trúc. Mỗi thành viên chịu trách nhiệm phân tích sâu một kỹ thuật cụ thể, đảm bảo cái nhìn toàn diện về cách thức dữ liệu được lưu trữ và truy xuất hiệu quả nhất.
 
-Hãy xem xét một ví dụ đơn giản: Giả sử một bộ xử lý có tốc độ 3 GHz (chu kỳ 0.33 nanosecond), bộ nhớ chính có độ trễ 100 nanosecond (tương đương ~300 chu kỳ). Nếu không có Cache:
+\newpage
+
+\section{Phần 1: Bộ nhớ ảo và Mở rộng RAM bằng Ổ cứng}
+
+\subsection{Khái niệm Bộ nhớ ảo (Virtual Memory)}
+Bộ nhớ ảo là một kỹ thuật quản lý bộ nhớ được thực hiện bởi sự phối hợp giữa phần cứng (MMU - Memory Management Unit) và phần mềm (Hệ điều hành). Nó cho phép hệ thống sử dụng một không gian địa chỉ logic lớn hơn nhiều so với dung lượng vật lý thực tế của RAM. Về bản chất, bộ nhớ ảo hoạt động như một tầng cache cho ổ cứng, nơi các trang (pages) dữ liệu được hoán đổi linh hoạt.
+
+\subsection{Hạn chế của cơ chế Swap truyền thống}
+Cơ chế hoán đổi (Swap) truyền thống hoạt động ở mức độ \textbf{trang (page granularity)} - thường là 4KB. Điều này dẫn đến hai vấn đề lớn khi sử dụng với ổ cứng thể rắn (SSD):
 \begin{itemize}
-    \item Thời gian chờ mỗi lần bộ xử lý truy cập bộ nhớ chính: 300 chu kỳ
-    \item Với Cache (Hit rate 95\%, Cache access time 1 chu kỳ):
-    \[
-    \text{Thời gian trung bình} = 0.95 \times 1 + 0.05 \times 300 = 15.95 \text{ chu kỳ}
-    \]
-    \item Cải thiện hiệu suất: $\frac{300}{15.95} \approx 19$ lần nhanh hơn!
+    \item \textbf{Write Amplification (Khuếch đại ghi)}: Khi chỉ một đối tượng nhỏ trong trang bị thay đổi, toàn bộ trang 4KB vẫn phải ghi lại xuống SSD, làm giảm hiệu năng và tuổi thọ chip Flash.
+    \item \textbf{Lãng phí RAM}: Các trang nạp vào RAM thường chứa nhiều đối tượng "lạnh" không cần thiết, làm giảm hiệu quả sử dụng dung lượng RAM vốn đã hạn chế.
 \end{itemize}
 
-Ví dụ này cho thấy tầm quan trọng của Cache trong cải thiện hiệu suất hệ thống. Bài tiểu luận này sẽ phân tích chi tiết các khía cạnh khác nhau của Cache để giúp bạn hiểu rõ hơn về cách nó hoạt động và cách tối ưu hóa nó.
+\subsection{Giải pháp Hybrid SSD/RAM: Hệ thống SSDAlloc}
+Nghiên cứu hiện đại (điển hình như hệ thống \textbf{SSDAlloc} \cite{badam2011ssdalloc} từ Đại học Princeton) đề xuất việc coi SSD như một phần mở rộng trực tiếp của RAM thay vì chỉ là thiết bị lưu trữ thứ cấp. Các đặc điểm chính bao gồm:
+\begin{itemize}
+    \item \textbf{Object Granularity (Độ mịn mức đối tượng)}: Thay vì quản lý theo trang 4KB, hệ thống quản lý dữ liệu ở mức độ đối tượng ứng dụng. Điều này giúp giảm tới 32 lần lượng dữ liệu ghi xuống SSD.
+    \item \textbf{Mô hình Object-Per-Page (OPP)}: Mỗi đối tượng nhỏ được gán vào một trang bộ nhớ ảo riêng biệt, giúp hệ thống tận dụng cơ chế bảo vệ phần cứng để theo dõi chính xác đối tượng nào đang được truy cập hoặc sửa đổi.
+    \item \textbf{RAM Object Cache}: Sử dụng phần lớn RAM làm bộ nhớ đệm cho các đối tượng "nóng", giúp đạt được tới 90\% hiệu năng của SSD thuần túy nhưng với dung lượng bộ nhớ khổng lồ.
+\end{itemize}
 
-\section{Nguyên lý Cơ bản và Cấu trúc Cache}
+\subsection{Tối ưu hóa Hiệu năng và Tuổi thọ}
+Việc kết hợp SSD và RAM theo mô hình hybrid mang lại những cải thiện vượt bậc:
+\begin{itemize}
+    \item \textbf{Hiệu năng}: Tăng băng thông xử lý lên đến 17 lần so với cơ chế Swap thông thường của Linux.
+    \item \textbf{Độ bền}: Bằng cách giảm thiểu số lần ghi không cần thiết (thông qua log-structured store), tuổi thọ của SSD được kéo dài đáng kể, cho phép triển khai các hệ thống cache lớn (như Memcached) với chi phí thấp hơn nhiều so với việc chỉ dùng DRAM.
+\end{itemize}
 
-\subsection{Nguyên lý Cục bộ (Principle of Locality)}
+\subsection{Ứng dụng trong Hệ thống Phân tán}
+Trong các hệ thống phân tán, bộ nhớ ảo hybrid cho phép các nút xử lý các tập dữ liệu cực lớn (hàng trăm GB đến TB) ngay trên một máy chủ đơn lẻ mà không cần đầu tư quá nhiều vào RAM vật lý, đồng thời vẫn đảm bảo tính nhất quán và khả năng phục hồi dữ liệu sau khi khởi động lại.
 
-Cache hoạt động dựa trên một nguyên lý quan trọng trong khoa học máy tính: \textbf{Nguyên lý cục bộ}. Có hai loại cục bộ chính:
+\newpage
 
+\section{Phần 2: Cache Đa cấp (Multilevel Cache)}
+
+\subsection{Cấu trúc Phân cấp Bộ nhớ}
+Để tối ưu hóa cả tốc độ và dung lượng, các kiến trúc sư máy tính sử dụng nhiều tầng cache giữa CPU và RAM. Mỗi tầng có sự đánh đổi (trade-off) khác nhau:
+\begin{itemize}
+    \item \textbf{L1 Cache (Cấp 1)}: Nhỏ nhất (vài chục KB), nhanh nhất, nằm ngay trong lõi CPU. Thường chia thành L1-I (lệnh) và L1-D (dữ liệu).
+    \item \textbf{L2 Cache (Cấp 2)}: Dung lượng lớn hơn (vài trăm KB đến vài MB), độ trễ cao hơn L1 một chút.
+    \item \textbf{L3 Cache (Cấp 3)}: Thường được chia sẻ giữa tất cả các lõi trong một bộ vi xử lý, dung lượng từ vài MB đến hàng chục MB.
+\end{itemize}
+
+\subsection{Chính sách Inclusivity (Bao hàm)}
+Việc quản lý dữ liệu giữa các cấp cache tuân theo các chính sách chính:
 \begin{enumerate}
-    \item \textbf{Cục bộ Thời gian (Temporal Locality)}: Dữ liệu vừa được truy cập có khả năng cao sẽ được truy cập lại trong thời gian gần với lần truy cập trước đó.
-    
-    \item \textbf{Cục bộ Không gian (Spatial Locality)}: Các dữ liệu có địa chỉ bộ nhớ gần nhau thường được truy cập cùng nhau trong thời gian gần nhau.
+    \item \textbf{Inclusive Cache}: Mọi dữ liệu ở L1 đều phải có bản sao ở L2. Điều này đơn giản hóa việc duy trì tính nhất quán (coherence) nhưng gây lãng phí dung lượng.
+    \item \textbf{Exclusive Cache}: Một khối dữ liệu chỉ tồn tại ở duy nhất một cấp cache. Nếu dữ liệu được nạp vào L1, nó sẽ bị xóa khỏi L2. Cách này tối ưu hóa tổng dung lượng cache.
+    \item \textbf{Non-inclusive}: Dữ liệu ở L1 có thể có hoặc không có ở L2.
 \end{enumerate}
 
-\subsection{Phân cấp Bộ nhớ}
-
-Bộ nhớ trong máy tính được tổ chức theo phân cấp từ nhanh-nhỏ đến chậm-lớn:
-\begin{table}[h]
-\centering
-\begin{tabular}{|l|c|c|c|}
-\hline
-\textbf{Loại Bộ nhớ} & \textbf{Dung lượng} & \textbf{Tốc độ} & \textbf{Vị trí} \\
-\hline
-Thanh ghi & KB & Siêu nhanh & Lõi CPU \\
-L1 Cache & 32 KB & Rất nhanh & Bên trong lõi \\
-L2 Cache & 256 KB & Nhanh & Bên trong lõi \\
-L3 Cache & 8-20 MB & Trung bình & Bên ngoài lõi \\
-Bộ nhớ chính & GB & Chậm & Bên ngoài chip \\
-Ổ cứng & TB & Rất chậm & Ngoài hệ thống \\
-\hline
-\end{tabular}
-\caption{Phân cấp bộ nhớ trong kiến trúc máy tính.}
-\end{table}
-
-Cache là lớp trung gian giữa thanh ghi (nhanh, nhỏ) và bộ nhớ chính (chậm, lớn), nhằm tạo ra ảo giác về một bộ nhớ vừa nhanh vừa lớn.
-
-\subsection{Cấu trúc của một dòng Cache (Cache Line)}
-
-Mỗi dòng Cache bao gồm các thành phần sau:
-
-\begin{itemize}
-    \item \textbf{Tag}: Định danh khối dữ liệu, cho phép xác định chính xác khối dữ liệu nào đang lưu trữ
-    \item \textbf{Data}: Chứa dữ liệu thực tế (thường 64 byte)
-    \item \textbf{Valid Bit}: Xác nhận liệu dữ liệu trong dòng này có hợp lệ hay không
-    \item \textbf{Dirty Bit}: Đánh dấu liệu dữ liệu đã bị sửa đổi so với bộ nhớ chính
-\end{itemize}
-
-\section{Các Phương pháp Ánh xạ Cache (Cache Mapping)}
-
-Việc quyết định một khối dữ liệu từ bộ nhớ chính sẽ nằm ở đâu trong Cache được thực hiện thông qua ba phương thức chính.
-
-\subsection{Ánh xạ Trực tiếp (Direct Mapped)}
-
-Mỗi khối bộ nhớ chỉ có duy nhất một vị trí cố định trong Cache:
+\subsection{Tối ưu hóa Hiệu năng qua Cache Đa cấp}
+Hiệu năng của cache đa cấp được đo bằng Thời gian truy cập trung bình (AMAT):
 \[
-\text{Vị trí Cache} = (\text{Địa chỉ khối}) \mod (\text{Số lượng dòng trong Cache})
+\text{AMAT} = \text{T}_1 + \text{MR}_1 \times (\text{T}_2 + \text{MR}_2 \times \text{T}_{\text{memory}})
 \]
+Trong đó T là thời gian truy cập và MR là tỷ lệ trượt (miss rate) của từng cấp. Việc thêm cấp L2 và L3 giúp giảm "Miss Penalty" của cấp L1, vì việc truy xuất dữ liệu từ L2 nhanh hơn nhiều so với việc phải xuống tận RAM.
 
-\textbf{Ưu điểm}: Đơn giản, nhanh chóng.
+\subsection{Xu hướng hiện đại: L4 Cache và HBM}
+Một số bộ xử lý cao cấp hiện nay tích hợp thêm L4 Cache (eDRAM) hoặc sử dụng bộ nhớ băng thông cao (High Bandwidth Memory - HBM) ngay trên đế chip. Điều này tạo ra một tầng đệm khổng lồ, cực kỳ hữu ích cho các tác vụ đồ họa và xử lý AI nặng.
 
-\textbf{Nhược điểm}: Dễ xảy ra xung đột khi nhiều khối bộ nhớ ánh xạ vào cùng một vị trí.
+\newpage
 
-\subsection{Ánh xạ Tập hợp Liên kết (Set Associative)}
+\section{Phần 3: Nạp trước dữ liệu (Precaching)}
 
-Cache được chia thành các tập hợp (sets), mỗi khối bộ nhớ được ánh xạ vào một tập hợp nhất định nhưng có thể nằm ở bất kỳ dòng nào trong tập hợp đó. Phương thức này là \textbf{phổ biến nhất} trong kiến trúc máy tính hiện đại.
+\subsection{Nguyên lý của Precaching}
+Precaching (hoặc Prefetching) là kỹ thuật dự đoán các dữ liệu hoặc lệnh mà CPU sẽ cần trong tương lai gần và nạp chúng vào cache trước khi chúng thực sự được yêu cầu. Kỹ thuật này dựa trên việc khai thác triệt để tính cục bộ của dữ liệu (Locality).
 
-\textbf{Công thức}: Với $n$-way set-associative cache:
-\[
-\text{Tập hợp} = (\text{Địa chỉ khối}) \mod (\text{Số tập hợp})
-\]
-
-\subsection{Ánh xạ Liên kết Đầy đủ (Fully Associative)}
-
-Một khối dữ liệu có thể nằm ở bất kỳ vị trí nào trong Cache. Cách này giúp giảm tỷ lệ trượt nhưng đòi hỏi phần cứng phức tạp để tìm kiếm song song (parallel search).
-
-\section{Hiệu suất và Phân loại Lỗi Truy cập Cache}
-
-\subsection{AMAT: Thời gian Truy cập Bộ nhớ Trung bình}
-
-Hiệu suất cache được đo bằng Average Memory Access Time (AMAT):
-\[
-\text{AMAT} = \text{Hit Time} + \text{Miss Rate} \times \text{Miss Penalty}
-\]
-
-Trong đó:
-\begin{itemize}
-    \item \textbf{Hit Time}: Thời gian truy cập nếu dữ liệu có trong Cache
-    \item \textbf{Miss Rate}: Tỷ lệ phần trăm các truy cập không tìm thấy trong Cache
-    \item \textbf{Miss Penalty}: Thời gian bổ sung cần thiết để nạp dữ liệu từ bộ nhớ chính
-\end{itemize}
-
-\subsection{Mô hình 3C: Phân loại Nguyên nhân Lỗi Cache}
-
-Các lỗi Cache có thể được phân loại thành ba loại:
-
+\subsection{Phân loại Kỹ thuật Prefetching}
 \begin{enumerate}
-    \item \textbf{Compulsory Miss (Lỗi Bắt buộc)}: Xảy ra khi truy cập một khối dữ liệu lần đầu tiên (còn gọi là lỗi khởi động lạnh). Loại lỗi này không thể tránh khỏi.
-    
-    \item \textbf{Capacity Miss (Lỗi Dung lượng)}: Xảy ra khi Cache không đủ lớn để chứa tất cả các khối dữ liệu cần thiết cho chương trình. Có thể giảm bằng cách tăng kích thước Cache.
-    
-    \item \textbf{Conflict Miss (Lỗi Xung đột)}: Xảy ra khi nhiều khối bộ nhớ cùng ánh xạ vào một vị trí trong Cache. Chỉ xảy ra ở ánh xạ trực tiếp hoặc tập hợp liên kết. Có thể giảm bằng cách sử dụng ánh xạ liên kết đầy đủ hoặc tăng độ kết hợp.
+    \item \textbf{Hardware Prefetching (Phần cứng)}:
+    \begin{itemize}
+        \item \textit{Stride Prefetcher}: Nhận diện các mẫu truy cập bộ nhớ theo bước nhảy cố định (ví dụ: truy cập mảng).
+        \item \textit{Stream Buffer}: Theo dõi các luồng truy cập tuần tự và nạp trước các khối tiếp theo.
+    \end{itemize}
+    \item \textbf{Software Prefetching (Phần mềm)}:
+    \begin{itemize}
+        \item Lập trình viên hoặc trình biên dịch chèn các lệnh đặc biệt (như \texttt{PREFETCH} trong x86) vào mã nguồn. 
+        \item Điều này cho phép tận dụng kiến thức về logic chương trình mà phần cứng không thể thấy được.
+    \end{itemize}
 \end{enumerate}
 
-\section{Các Thuật toán Thay thế và Chính sách Ghi}
-
-\subsection{Thuật toán Thay thế}
-
-Khi Cache đầy và cần nạp một khối dữ liệu mới, máy tính phải chọn khối nào sẽ bị loại bỏ. Các thuật toán phổ biến bao gồm:
-
+\subsection{Lợi ích và Rủi ro}
+\textbf{Lợi ích}:
 \begin{itemize}
-    \item \textbf{LRU (Least Recently Used)}: Loại bỏ khối ít được sử dụng gần đây nhất. Đây là thuật toán được sử dụng rộng rãi nhất vì hiệu suất tốt và dựa trên nguyên lý cục bộ thời gian.
-    
-    \item \textbf{FIFO (First In First Out)}: Loại bỏ khối nạp vào Cache sớm nhất. Đơn giản nhưng không tối ưu.
-    
-    \item \textbf{Random}: Chọn ngẫu nhiên một khối để loại bỏ. Dễ cài đặt nhưng hiệu suất thấp hơn LRU.
-    
-    \item \textbf{LFU (Least Frequently Used)}: Loại bỏ khối được sử dụng ít lần nhất.
+    \item Giảm đáng kể thời gian chờ (stalling) của CPU.
+    \item Che giấu độ trễ của bộ nhớ chính bằng cách thực hiện việc nạp dữ liệu song song với việc tính toán.
 \end{itemize}
 
-\subsection{Chính sách Ghi Dữ liệu (Write Policy)}
+\textbf{Rủi ro (Cache Pollution)}:
+Nếu thuật toán dự đoán sai, nó sẽ nạp vào cache những dữ liệu không cần thiết, đẩy các dữ liệu hữu ích ra ngoài. Điều này không chỉ làm tăng tỷ lệ trượt mà còn gây lãng phí băng thông bộ nhớ và năng lượng.
 
-Khi bộ xử lý ghi dữ liệu, cần quyết định cách cập nhật Cache và bộ nhớ chính:
+\subsection{Ứng dụng trong Web Caching và CDN}
+Kỹ thuật Precaching không chỉ giới hạn trong CPU. Trong hệ thống phân tán, các trình duyệt web có thể nạp trước các tài nguyên (hình ảnh, script) của trang tiếp theo mà người dùng có khả năng click vào. Các mạng phân phối nội dung (CDN) cũng sử dụng cơ chế này để đẩy dữ liệu đến các máy chủ biên (edge servers) gần người dùng nhất.
 
-\subsubsection{Write-through (Ghi Xuyên)}
-\begin{itemize}
-    \item Cập nhật dữ liệu \textbf{đồng thời} vào cả Cache và bộ nhớ chính
-    \item \textbf{Ưu điểm}: Bộ nhớ chính luôn được cập nhật, không gây mất dữ liệu
-    \item \textbf{Nhược điểm}: Làm tăng lưu lượng trên bus bộ nhớ
-\end{itemize}
+\newpage
 
-\subsubsection{Write-back (Ghi Trả)}
-\begin{itemize}
-    \item Chỉ cập nhật vào Cache, khối dữ liệu chỉ được ghi lại vào bộ nhớ chính khi nó bị thay thế khỏi Cache
-    \item \textbf{Ưu điểm}: Giảm lưu lượng bus, hiệu suất cao hơn
-    \item \textbf{Nhược điểm}: Phức tạp hơn, có rủi ro mất dữ liệu nếu xảy ra lỗi
-\end{itemize}
+\section{Phần 4: [Tên chủ đề phần 4]}
 
-\section{Các Kỹ thuật Tối ưu hóa Nâng cao}
+\textit{(Nội dung phần này hiện đang để trống theo yêu cầu để thành viên thứ 4 hoàn thiện)}
 
-\subsection{Cache Đa cấp (Multilevel Caches)}
-
-Các bộ xử lý hiện đại sử dụng ba cấp Cache:
-
-\begin{itemize}
-    \item \textbf{L1 Cache}: Nhỏ (32 KB), nhanh nhất, nằm trong lõi CPU, được chia thành L1-Instruction và L1-Data
-    \item \textbf{L2 Cache}: Trung bình (256 KB - 1 MB), nhanh, nằm bên trong lõi hoặc gần lõi
-    \item \textbf{L3 Cache}: Lớn (8-20 MB), chậm hơn L1 và L2, chia sẻ giữa các lõi trên một chip
-\end{itemize}
-
-Việc sử dụng Cache đa cấp giúp giảm hình phạt khi bị trượt Cache (miss penalty).
-
-\subsection{Cache Không chặn (Non-blocking Cache)}
-
-Cho phép bộ xử lý tiếp tục thực thi các lệnh khác hoặc xử lý các truy cập Cache thành công trong khi đang chờ phản hồi từ một lỗi truy cập Cache trước đó. Kỹ thuật này cải thiện thông lượng của bộ xử lý đáng kể.
-
-\subsection{Nạp trước (Prefetching)}
-
-Dự đoán và nạp dữ liệu vào Cache trước khi bộ xử lý yêu cầu:
-
-\begin{itemize}
-    \item \textbf{Prefetching phần cứng}: Các mạch chuyên dụng dự đoán các truy cập trong tương lai dựa trên mô hình truy cập hiện tại
-    \item \textbf{Prefetching phần mềm}: Trình biên dịch chèn các lệnh gợi ý nạp dữ liệu vào chương trình
-\end{itemize}
-
-\subsection{Victim Cache}
-
-Một bộ nhớ đệm nhỏ, liên kết đầy đủ để giữ lại các khối vừa bị loại bỏ khỏi Cache chính. Kỹ thuật này đặc biệt hiệu quả trong việc giảm lỗi xung đột trong các Cache trực tiếp.
-
-\section{Tính Nhất quán Cache (Cache Coherence)}
-
-Trong các hệ thống đa bộ xử lý (multiprocessor), việc đảm bảo các Cache của các lõi khác nhau có cùng giá trị cho cùng một địa chỉ bộ nhớ là rất quan trọng.
-
-\subsection{Vấn đề Nhất quán Cache}
-
-Xảy ra khi hai bộ xử lý cùng giữ bản sao của một địa chỉ dữ liệu và một bên thay đổi giá trị đó. Bộ xử lý khác sẽ có thông tin lỗi thời nếu không được thông báo về sự thay đổi.
-
-\subsection{Giao thức Snooping (Giám sát)}
-
-Các bộ điều khiển Cache theo dõi các hoạt động trên bus chung để cập nhật hoặc vô hiệu hóa bản sao dữ liệu của mình khi cần. Đây là phương thức phổ biến trong các hệ thống multiprocessor nhỏ vừa.
-
-\subsection{Giao thức Directory-based (Dựa trên Danh mục)}
-
-Trạng thái chia sẻ của các khối bộ nhớ được lưu giữ tập trung trong một danh mục, giúp giảm lưu lượng phát sóng trên hệ thống lớn.
-
-\subsection{Trạng thái MESI}
-
-Giao thức phổ biến bao gồm bốn trạng thái:
-
-\begin{enumerate}
-    \item \textbf{Modified (Đã sửa đổi)}: Dữ liệu đã được sửa đổi chỉ tồn tại trong Cache này
-    \item \textbf{Exclusive (Độc quyền)}: Dữ liệu không bị sửa đổi nhưng chỉ tồn tại trong Cache này
-    \item \textbf{Shared (Chia sẻ)}: Dữ liệu không bị sửa đổi và có thể tồn tại ở các Cache khác
-    \item \textbf{Invalid (Không hợp lệ)}: Dữ liệu không hợp lệ
-\end{enumerate}
+\newpage
 
 \section{Kết luận}
 
-Cache là một thành phần thiết yếu trong kiến trúc máy tính hiện đại, giúp giảm khoảng cách hiệu suất giữa bộ xử lý và bộ nhớ chính. Thông qua việc hiểu rõ các nguyên lý cơ bản, phương pháp ánh xạ, phân loại lỗi, thuật toán thay thế, chính sách ghi, và các kỹ thuật tối ưu hóa nâng cao, chúng ta có thể thiết kế và tối ưu hóa các hệ thống máy tính với hiệu suất cao hơn. Với sự phát triển của công nghệ đa lõi (multicore), vấn đề nhất quán cache cũng trở nên ngày càng quan trọng.
-
-Tương lai của kiến trúc máy tính sẽ tiếp tục phụ thuộc vào những cải tiến trong thiết kế Cache, từ các thuật toán thay thế thông minh hơn đến các kỹ thuật dự đoán nâng cao, nhằm tối ưu hóa hiệu suất tổng thể của hệ thống.
+Tối ưu hóa cache là một quá trình đa tầng, đòi hỏi sự phối hợp nhịp nhàng giữa phần cứng, hệ điều hành và ứng dụng. Thông qua việc nghiên cứu bộ nhớ ảo, cache đa cấp và kỹ thuật nạp trước, chúng ta thấy rằng không có một giải pháp duy nhất cho mọi bài toán. Thay vào đó, việc kết hợp linh hoạt các phương pháp này giúp hệ thống máy tính hiện đại đạt được hiệu năng tối ưu, đáp ứng nhu cầu ngày càng cao của người dùng và các ứng dụng phức tạp.
 
 \bibliography{sample}
 \bibliographystyle{plain}
-
-\end{document}
-
-To configure the document language, simply edit the option provided to the babel package in the preamble at the top of this example project. To learn more about the different options, please visit this help article on \href{https://www.overleaf.com/learn/latex/International_language_support}{international language support}.
-
-To change the spell check language, simply open the Overleaf menu at the top left of the editor window, scroll down to the spell check setting, and adjust accordingly.
-
-\subsection{How to add Citations and a References List}
-
-You can simply upload a \verb|.bib| file containing your BibTeX entries, created with a tool such as JabRef. You can then cite entries from it, like this: \cite{greenwade93}. Just remember to specify a bibliography style, as well as the filename of the \verb|.bib|. You can find a \href{https://www.overleaf.com/help/97-how-to-include-a-bibliography-using-bibtex}{video tutorial here} to learn more about BibTeX.
-
-If you have an \href{https://www.overleaf.com/user/subscription/plans}{upgraded account}, you can also import your Mendeley or Zotero library directly as a \verb|.bib| file, via the upload menu in the file-tree.
-
-\subsection{Good luck!}
-
-We hope you find Overleaf useful, and do take a look at our \href{https://www.overleaf.com/learn}{help library} for more tutorials and user guides! Please also let us know if you have any feedback using the \textbf{Contact us} link at the bottom of the Overleaf menu --- or use the contact form at \url{https://www.overleaf.com/contact}.
-
-\bibliographystyle{alpha}
-\bibliography{sample}
 
 \end{document}

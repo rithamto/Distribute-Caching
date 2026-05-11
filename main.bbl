@@ -1,0 +1,8 @@
+\begin{thebibliography}{1}
+
+\bibitem{badam2011ssdalloc}
+Anirudh Badam and Vivek~S Pai.
+\newblock Ssdalloc: Hybrid ssd/ram memory management made easy.
+\newblock In {\em NSDI}, volume~11, pages 1--1, 2011.
+
+\end{thebibliography}
