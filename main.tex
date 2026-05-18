@@ -16,54 +16,52 @@
 \usepackage{booktabs}
 \usepackage[colorlinks=true, allcolors=blue]{hyperref}
 \usepackage{natbib}
+\usepackage{float}
 
 \title{\Large \textbf{Các Phương pháp Tối ưu hóa Cache}}
-\author{Nhóm nghiên cứu: [Tên thành viên 1, 2, 3, 4]}
-\date{\today}
+\author{[Đỗ Hữu Khang, Lê Đinh Ngọc Thành, 3, 4]}
+\date{University of Transport HoChiMinh City}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-Cache đóng vai trò then chốt trong việc thu hẹp khoảng cách hiệu suất giữa bộ xử lý và bộ nhớ chính. Trong kỷ nguyên dữ liệu lớn và tính toán hiệu năng cao, việc tối ưu hóa cache không chỉ dừng lại ở các tầng phần cứng gần CPU mà còn mở rộng ra các kỹ thuật quản lý bộ nhớ ảo và dự đoán dữ liệu. Bài tiểu luận này trình bày kết quả nghiên cứu của nhóm về bốn phương pháp tối ưu hóa cache quan trọng: (1) Sử dụng bộ nhớ ảo để mở rộng dung lượng RAM, (2) Kiến trúc cache đa cấp, (3) Kỹ thuật nạp trước (Precaching), và (4) [Chủ đề phần 4]. Mục tiêu của nghiên cứu là phân tích cơ chế hoạt động, ưu điểm và thách thức của từng phương pháp trong việc cải thiện tổng thể hiệu năng hệ thống.
+Tối ưu hóa cache đóng vai trò quyết định trong việc cải thiện hiệu năng hệ thống. Bài viết này tóm lược bốn giải pháp tối ưu nổi bật gồm: mở rộng RAM qua SSDAlloc, kiến trúc cache đa cấp, cơ chế nạp trước (precaching) và ứng dụng trong Web Caching.
 \end{abstract}
 
 \section{Giới thiệu}
 
-Trong kiến trúc máy tính hiện đại, bộ nhớ cache là một thành phần không thể thiếu nhằm giải quyết vấn đề "bức tường bộ nhớ" (memory wall) - hiện tượng tốc độ của bộ xử lý (CPU) tăng trưởng nhanh hơn nhiều so với tốc độ truy cập bộ nhớ chính (DRAM). Một hệ thống cache hiệu quả có thể giảm thiểu độ trễ truy cập, tăng băng thông dữ liệu và tối ưu hóa mức tiêu thụ năng lượng.
+Nhằm vượt qua "bức tường bộ nhớ" (memory wall) giữa CPU và DRAM, tối ưu hóa hệ thống cache là bắt buộc. Bài viết phân tích bốn giải pháp tối ưu hóa trải dài từ quản lý bộ nhớ ảo cấp hệ điều hành, cấu trúc phần cứng đa tầng, cho đến các cơ chế tiền nạp dự đoán và ứng dụng thực tế trên Web.
 
-Nhóm nghiên cứu của chúng tôi tập trung vào bốn khía cạnh tối ưu hóa khác nhau, từ mức độ hệ điều hành đến mức độ phần cứng vi kiến trúc. Mỗi thành viên chịu trách nhiệm phân tích sâu một kỹ thuật cụ thể, đảm bảo cái nhìn toàn diện về cách thức dữ liệu được lưu trữ và truy xuất hiệu quả nhất.
+\section{Phần 1: Bộ nhớ ảo và Mở rộng RAM bằng SSDAlloc}
 
-\section{Phần 1: Bộ nhớ ảo và Mở rộng RAM bằng Ổ cứng}
+\subsection{Khái niệm Bộ nhớ ảo và Hạn chế của Swap Truyền thống}
+Bộ nhớ ảo mở rộng không gian địa chỉ vượt quá RAM vật lý. Tuy nhiên, cơ chế Swap truyền thống hoạt động ở mức độ trang cứng nhắc (page granularity - 4KB), gây hiện tượng Write Amplification giảm tuổi thọ SSD và lãng phí DRAM do nạp kèm các đối tượng "lạnh".
 
-\subsection{Khái niệm Bộ nhớ ảo (Virtual Memory)}
-Bộ nhớ ảo là một kỹ thuật quản lý bộ nhớ được thực hiện bởi sự phối hợp giữa phần cứng (MMU - Memory Management Unit) và phần mềm (Hệ điều hành). Nó cho phép hệ thống sử dụng một không gian địa chỉ logic lớn hơn nhiều so với dung lượng vật lý thực tế của RAM. Về bản chất, bộ nhớ ảo hoạt động như một tầng cache cho ổ cứng, nơi các trang (pages) dữ liệu được hoán đổi linh hoạt.
-
-\subsection{Hạn chế của cơ chế Swap truyền thống}
-Cơ chế hoán đổi (Swap) truyền thống hoạt động ở mức độ \textbf{trang (page granularity)} - thường là 4KB. Điều này dẫn đến hai vấn đề lớn khi sử dụng với ổ cứng thể rắn (SSD):
+\subsection{Kiến trúc của Hệ thống SSDAlloc}
+Nghiên cứu từ Đại học Princeton đề xuất \textbf{SSDAlloc} \cite{badam2011ssdalloc} - trình quản lý bộ nhớ lai DRAM/SSD hoạt động ở mức độ đối tượng (object granularity) nhằm tối ưu hóa hiệu năng và độ bền. Kiến trúc gồm các phần:
 \begin{itemize}
-    \item \textbf{Write Amplification}: Khi chỉ một đối tượng nhỏ trong trang bị thay đổi, toàn bộ trang 4KB vẫn phải ghi lại xuống SSD, làm giảm hiệu năng và tuổi thọ chip Flash.
-    \item \textbf{Lãng phí RAM}: Các trang nạp vào RAM thường chứa nhiều đối tượng "lạnh" không cần thiết.
+    \item \textbf{Kiến trúc Vật lý}: Gồm RAM Object Cache (quản lý LRU nén đối tượng thô) và Page Buffer (vùng đệm FIFO chứa các trang thực tế để CPU xử lý trực tiếp).
+    \item \textbf{Kiến trúc Bộ nhớ ảo}: Dùng mô hình OPP (một đối tượng/trang) và MP (mảng liên tục), chặn lỗi trang bằng \texttt{mprotect} và dịch nhanh qua cây nhị phân cân bằng ATM.
+    \item \textbf{Quản lý Dữ liệu trên SSD}: SSD tổ chức dạng log-structured ghi tuần tự, căn hàng sector 512 byte và gom cụm đối tượng nhỏ dưới 128 byte để giảm tải cho RAM.
+    \item \textbf{Bộ dọn rác (Garbage Collector)}: Áp dụng cơ chế Copy-and-Compact tuần tự, kiểm tra liveness dễ dàng bằng con trỏ ngược $\langle\text{OTID}, \text{OTO}\rangle$ trong Object Table.
 \end{itemize}
 
-\subsection{Giải pháp Hybrid SSD/RAM: Hệ thống SSDAlloc}
-Nghiên cứu hiện đại (điển hình như hệ thống \textbf{SSDAlloc} \cite{badam2011ssdalloc} từ Đại học Princeton) đề xuất việc coi SSD như một phần mở rộng trực tiếp của RAM thay vì chỉ là thiết bị lưu trữ thứ cấp. Các đặc điểm chính bao gồm:
-\begin{itemize}
-    \item \textbf{Object Granularity}: Thay vì quản lý theo trang 4KB, hệ thống quản lý dữ liệu ở mức độ đối tượng ứng dụng.
-    \item \textbf{Mô hình Object-Per-Page (OPP)}: Mỗi đối tượng nhỏ được gán vào một trang bộ nhớ ảo riêng biệt.
-    \item \textbf{RAM Object Cache}: Sử dụng phần lớn RAM làm bộ nhớ đệm cho các đối tượng "nóng".
-\end{itemize}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{ssdalloc.png}
+    \caption{Kiến trúc tổng quan ba tầng của hệ thống SSDAlloc.}
+    \label{fig:ssdalloc_arch}
+\end{figure}
 
-\subsection{Tối ưu hóa Hiệu năng và Tuổi thọ}
-Việc kết hợp SSD và RAM theo mô hình hybrid mang lại những cải thiện vượt bậc:
-\begin{itemize}
-    \item \textbf{Hiệu năng}: Tăng băng thông xử lý lên đến 17 lần so với cơ chế Swap thông thường của Linux.
-    \item \textbf{Độ bền}: Tuổi thọ của SSD được kéo dài đáng kể thông qua việc giảm thiểu số lần ghi không cần thiết.
-\end{itemize}
+\subsection{Vận hành và Hiệu năng}
+SSDAlloc đánh chặn lỗi trang để thực hiện hiện thực hóa (materialize) hoặc hủy hiện thực hóa đối tượng. Hệ thống giúp tăng throughput lên đến 17 lần so với Swap thông thường và kéo dài tuổi thọ SSD tới 32 lần.
 
-\subsection{Ứng dụng trong Hệ thống Phân tán}
-Trong các hệ thống phân tán, bộ nhớ ảo hybrid cho phép các nút xử lý các tập dữ liệu cực lớn ngay trên một máy chủ đơn lẻ mà không cần đầu tư quá nhiều vào RAM vật lý.
+\subsection{Ứng dụng Thực tế}
+Kiến trúc hybrid này đặc biệt hiệu quả trong các hệ thống phân tán lớn (Memcached, B+Tree) để xử lý tập dữ liệu hàng trăm GB trên cấu hình RAM hạn chế.
+
+\vfill\newpage
 
 \section{Phần 2: Cache Đa cấp (Multilevel Cache)}
 
@@ -90,20 +88,23 @@ Sử dụng bộ nhớ băng thông cao (HBM) ngay trên đế chip để tạo 
 \section{Phần 3: Nạp trước dữ liệu (Precaching)}
 
 \subsection{Nguyên lý của Precaching}
-Dự đoán các dữ liệu hoặc lệnh mà CPU sẽ cần trong tương lai gần và nạp chúng vào cache trước khi chúng thực sự được yêu cầu.
+Dự đoán các dữ liệu hoặc lệnh mà CPU sẽ cần trong tương lai gần và nạp chúng vào cache trước khi chúng thực sự được yêu cầu, giúp giảm thời gian chờ đợi dữ liệu từ bộ nhớ chính, từ đó tăng tốc hiệu suất tổng thể
 
 \subsection{Phân loại Kỹ thuật Prefetching}
 \begin{enumerate}
-    \item \textbf{Hardware Prefetching}: \textit{Stride Prefetcher}, \textit{Stream Buffer}.
-    \item \textbf{Software Prefetching}: Chèn các lệnh gợi ý vào mã nguồn. 
+    \item \textbf{Hardware Prefetching}: Việc nạp trước dữ liệu dựa trên phần cứng thường được thực hiện bằng cách sử dụng một cơ chế phần cứng chuyên dụng trong bộ xử lý để theo dõi luồng lệnh hoặc dữ liệu được chương trình đang thực thi yêu cầu, nhận biết một vài phần tử tiếp theo mà chương trình có thể cần dựa trên luồng này và nạp trước chúng vào bộ nhớ cache của bộ xử lý. 
+    Các phương pháp Hardware Prefetching:
+    \textit{Stride Prefetcher}, \textit{Stream Buffer}, \textit{Irregular Temporal Prefetching}
+    \item \textbf{Software Prefetching}: Chèn các lệnh gợi ý vào mã nguồn. Các lệnh tìm nạp trước ảnh hưởng đến hiệu năng nhưng không ảnh hưởng đến logic chương trình. Việc tìm nạp trước bằng phần mềm có tác động tích cực đến hiệu năng khi được thực hiện đúng thời điểm trước khi tải thực tế. Nếu được thực hiện quá gần thời điểm truy cập, dữ liệu sẽ không được sao chép vào bộ nhớ cache; nếu được thực hiện quá xa, dữ liệu sẽ bị loại bỏ khi thực hiện tải 
 \end{enumerate}
 
 \subsection{Lợi ích và Rủi ro}
-\textbf{Lợi ích}: Giảm thời gian chờ của CPU.
-\textbf{Rủi ro}: \textit{Cache Pollution} (làm bẩn cache) nếu dự đoán sai.
+\textbf{Lợi ích}: Giảm thời gian chờ của CPU, giảm cache miss.
+\text{Các chỉ số đánh giá Prefetching được kể đến:} Coverage, Accuracy, Timeliness, Lateness, Pollution
+\textbf{Rủi ro}: \textit{Cache Pollution} (làm bẩn cache) nếu dự đoán sai tốn băng thông bộ nhớ, Prefetch sớm dữ liệu bị đẩy ra khỏi cache trước khi dùng, ngược lại Prefetch muộn sẽ không giảm được độ trễ.
 
-\subsection{Ứng dụng trong Web Caching và CDN}
-Các trình duyệt và CDN nạp trước tài nguyên để tăng tốc độ truy cập cho người dùng.
+\subsection{Ứng dụng trong Web Caching và CDN(Content Delivery Network)}
+Các trình duyệt và CDN tối ưu hoá việc sử dụng tài nguyên, nâng cao hiệu suất bằng cách giảm độ trễ và tăng tốc độ phân phối nội dung, giúp trải nghiệm người dùng tốt hơn. 
 
 \section{Phần 4: [Tên chủ đề phần 4]}
 
