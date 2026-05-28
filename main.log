@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.5.5)  18 MAY 2026 20:12
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.5.5)  27 MAY 2026 18:58
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -702,28 +702,28 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <9> not available
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 28.
 LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 4
-5.
+2.
 
 (/usr/local/texlive/2026basic/texmf-dist/tex/latex/psnfss/ts1ptm.fd
 File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
 )
 LaTeX Font Info:    Trying to load font information for T5+cmtt on input line 4
-6.
+3.
 
 (/usr/local/texlive/2026basic/texmf-dist/tex/latex/vntex/t5cmtt.fd
 File: t5cmtt.fd 1999/05/25 v2.5h Standard LaTeX font definitions
 )
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 48.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 46.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <7.4> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 48.
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 46.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <6> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 48.
-<ssdalloc.png, id=73, 618.31pt x 951.555pt>
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 46.
+<ssdalloc.png, id=65, 618.31pt x 951.555pt>
 File: ssdalloc.png Graphic file (type png)
 <use ssdalloc.png>
-Package pdftex.def Info: ssdalloc.png  used on input line 53.
-(pdftex.def)             Requested size: 251.07481pt x 386.39403pt.
+Package pdftex.def Info: ssdalloc.png  used on input line 51.
+(pdftex.def)             Requested size: 188.3061pt x 289.79552pt.
  [1{/usr/local/texlive/2026basic/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{
 /usr/local/texlive/2026basic/texmf-dist/fonts/enc/dvips/vntex/t5.enc}
 
@@ -733,53 +733,91 @@ Package pdftex.def Info: ssdalloc.png  used on input line 53.
 ound.
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.64 \vfill\newpage
+l.56 \vfill\newpage
                    
-? 
+I wasn't able to read the size data for this font,
+so I will ignore the font specification.
+[Wizards can fix TFM files using TFtoPL/PLtoTF.]
+You might try inserting a different font spec;
+e.g., type `I\font<same font id>=<substitute font name>'.
+
 
 pdfTeX warning (ext4): destination with the same identifier (name{figure.1}) ha
 s been already used, duplicate ignored
 <argument> ...shipout:D \box_use:N \l_shipout_box 
                                                   \__shipout_drop_firstpage_...
-l.64 \vfill\newpage
+l.56 \vfill\newpage
                     <./ssdalloc.png>]
-Underfull \hbox (badness 1072) in paragraph at lines 66--66
+Underfull \hbox (badness 1072) in paragraph at lines 58--58
 []\T5/ptm/b/n/14.4 Ph¦n 2: Cache ^^^a c§p (Mul-ti-level
  []
 
+<memory_hierarchy_diagram.png, id=82, 978.65625pt x 554.07pt>
+File: memory_hierarchy_diagram.png Graphic file (type png)
+<use memory_hierarchy_diagram.png>
+Package pdftex.def Info: memory_hierarchy_diagram.png  used on input line 70.
+(pdftex.def)             Requested size: 251.07481pt x 142.1441pt.
 
-Underfull \hbox (badness 1946) in paragraph at lines 88--88
+LaTeX Warning: File `Distribute-Caching/cache_notation.png' not found on input 
+line 89.
+
+
+! Package pdftex.def Error: File `Distribute-Caching/cache_notation.png' not fo
+und: using draft setting.
+
+See the pdftex.def package documentation for explanation.
+Type  H <return>  for immediate help.
+ ...                                              
+                                                  
+l.89 ...th]{Distribute-Caching/cache_notation.png}
+                                                  
+Try typing  <return>  to proceed.
+If that doesn't work, type  X <return>  to quit.
+
+
+Underfull \hbox (badness 1946) in paragraph at lines 99--99
 []\T5/ptm/b/n/14.4 Ph¦n 3: N¤p tr÷îc dú li»u (Pre-
  []
 
-
-Underfull \hbox (badness 10000) in paragraph at lines 106--106
+[2
+pdfTeX warning (ext4): destination with the same identifier (name{figure.2}) ha
+s been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.116 
+      
+pdfTeX warning (ext4): destination with the same identifier (name{figure.3}) ha
+s been already used, duplicate ignored
+<argument> ...shipout:D \box_use:N \l_shipout_box 
+                                                  \__shipout_drop_firstpage_...
+l.116 
+       <./memory_hierarchy_diagram.png>]
+Underfull \hbox (badness 10000) in paragraph at lines 117--117
 []\T5/ptm/b/n/12 Ùng döng trong Web Caching v 
  []
 
-(./main.bbl) [2] (./main.aux)
+(./main.bbl) [3
+
+] (./main.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 
 
-Package rerunfilecheck Warning: File `main.out' has changed.
-(rerunfilecheck)                Rerun to get outlines right
-(rerunfilecheck)                or use package `bookmark'.
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
 
-Package rerunfilecheck Info: Checksums for `main.out':
-(rerunfilecheck)             Before: 5AA894E3ED9F9FEAE82550D792AFFC5C;4214
-(rerunfilecheck)             After:  9EF88EAFEC8621CB93F4278134C72200;4252.
+Package rerunfilecheck Info: File `main.out' has not changed.
+(rerunfilecheck)             Checksum: F3FBE1A3FD5B464D6CD908FE1B3C0988;3939.
  ) 
 Here is how much of TeX's memory you used:
- 12009 strings out of 469006
- 187310 string characters out of 5454814
- 621731 words of memory out of 5000000
- 40505 multiletter control sequences out of 15000+600000
+ 12043 strings out of 469006
+ 188888 string characters out of 5454814
+ 624928 words of memory out of 5000000
+ 40540 multiletter control sequences out of 15000+600000
  672332 words of font info for 96 fonts, out of 8000000 for 9000
  319 hyphenation exceptions out of 8191
- 75i,8n,79p,675b,465s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 75i,8n,79p,915b,463s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2026basic/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi1
 0.pfb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/public/amsfonts/cm/c
 mr10.pfb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/public/amsfonts/c
@@ -788,10 +826,10 @@ tmb8v.pfb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/urw/times/utmr8a
 .pfb></usr/local/texlive/2026basic/texmf-dist/fonts/type1/vntex/urwvn/utmr8v.pf
 b></usr/local/texlive/2026basic/texmf-dist/fonts/type1/vntex/urwvn/utmri8v.pfb>
 </usr/local/texlive/2026basic/texmf-dist/fonts/type1/vntex/vnr/vntt10.pfb>
-Output written on main.pdf (2 pages, 207172 bytes).
+Output written on main.pdf (3 pages, 362858 bytes).
 PDF statistics:
- 145 PDF objects out of 1000 (max. 8388607)
- 121 compressed objects within 2 object streams
- 27 named destinations out of 1000 (max. 500000)
- 142 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 143 PDF objects out of 1000 (max. 8388607)
+ 116 compressed objects within 2 object streams
+ 26 named destinations out of 1000 (max. 500000)
+ 131 words of extra memory for PDF output out of 10000 (max. 10000000)
 

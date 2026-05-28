@@ -26,64 +26,75 @@
 
 \maketitle
 
-\begin{abstract}
-Tối ưu hóa cache đóng vai trò quyết định trong việc cải thiện hiệu năng hệ thống. Bài viết này tóm lược bốn giải pháp tối ưu nổi bật gồm: mở rộng RAM qua SSDAlloc, kiến trúc cache đa cấp, cơ chế nạp trước (precaching) và ứng dụng trong Web Caching.
-\end{abstract}
-
 \section{Giới thiệu}
 
-Nhằm vượt qua "bức tường bộ nhớ" (memory wall) giữa CPU và DRAM, tối ưu hóa hệ thống cache là bắt buộc. Bài viết phân tích bốn giải pháp tối ưu hóa trải dài từ quản lý bộ nhớ ảo cấp hệ điều hành, cấu trúc phần cứng đa tầng, cho đến các cơ chế tiền nạp dự đoán và ứng dụng thực tế trên Web.
+Nhằm vượt qua "bức tường bộ nhớ" (memory wall) giữa CPU và DRAM, tối ưu hóa hệ thống cache là bắt buộc. Bài viết phân tích bốn giải pháp tối ưu hóa trải dài từ quản lý bộ nhớ ảo cấp hệ điều hành, cấu trúc phần cứng đa tầng, cho đến các cơ chế tiền nạp dự đoán và ....
 
-\section{Phần 1: Bộ nhớ ảo và Mở rộng RAM bằng SSDAlloc}
+\section{Phần 1: Bộ nhớ ảo và Mở rộng Bộ nhớ bằng SSDAlloc}
 
 \subsection{Khái niệm Bộ nhớ ảo và Hạn chế của Swap Truyền thống}
-Bộ nhớ ảo mở rộng không gian địa chỉ vượt quá RAM vật lý. Tuy nhiên, cơ chế Swap truyền thống hoạt động ở mức độ trang cứng nhắc (page granularity - 4KB), gây hiện tượng Write Amplification giảm tuổi thọ SSD và lãng phí DRAM do nạp kèm các đối tượng "lạnh".
+Bộ nhớ ảo mở rộng không gian địa chỉ vượt quá RAM vật lý bằng cách ánh xạ địa chỉ ảo sang địa chỉ vật lý thông qua bảng trang (Page Table). Tuy nhiên, cơ chế Swap truyền thống của hệ điều hành hoạt động ở mức độ trang cứng nhắc (page granularity - 4KB). Khi xảy ra lỗi trang (Page Fault), OS buộc phải nạp toàn bộ trang 4KB từ SSD vào DRAM ngay cả khi ứng dụng chỉ cần truy cập một đối tượng vài chục byte, gây lãng phí dung lượng DRAM vật lý do nạp kèm các đối tượng ``lạnh'' (ít sử dụng). Hơn nữa, khi một đối tượng bị thay đổi, OS phải ghi lại cả trang 4KB xuống SSD, dẫn đến hiện tượng khuếch đại ghi (Write Amplification) nghiêm trọng, làm giảm nhanh tuổi thọ và hiệu năng của SSD.
 
-\subsection{Kiến trúc của Hệ thống SSDAlloc}
-Nghiên cứu từ Đại học Princeton đề xuất \textbf{SSDAlloc} \cite{badam2011ssdalloc} - trình quản lý bộ nhớ lai DRAM/SSD hoạt động ở mức độ đối tượng (object granularity) nhằm tối ưu hóa hiệu năng và độ bền. Kiến trúc gồm các phần:
+\subsection{Kiến trúc và Cơ chế Hoạt động của SSDAlloc so với Swap Truyền thống}
+Nghiên cứu từ Đại học Princeton đề xuất \textbf{SSDAlloc} \cite{badam2011ssdalloc} - trình quản lý bộ nhớ lai DRAM/SSD hoạt động ở mức độ đối tượng (object granularity) nhằm tối ưu hóa hiệu năng và độ bền của bộ nhớ flash. Bằng cách định nghĩa không gian địa chỉ riêng cho từng đối tượng, SSDAlloc thay đổi toàn diện cách thức tương tác với bộ nhớ ảo:
+
 \begin{itemize}
-    \item \textbf{Kiến trúc Vật lý}: Gồm RAM Object Cache (quản lý LRU nén đối tượng thô) và Page Buffer (vùng đệm FIFO chứa các trang thực tế để CPU xử lý trực tiếp).
-    \item \textbf{Kiến trúc Bộ nhớ ảo}: Dùng mô hình OPP (một đối tượng/trang) và MP (mảng liên tục), chặn lỗi trang bằng \texttt{mprotect} và dịch nhanh qua cây nhị phân cân bằng ATM.
-    \item \textbf{Quản lý Dữ liệu trên SSD}: SSD tổ chức dạng log-structured ghi tuần tự, căn hàng sector 512 byte và gom cụm đối tượng nhỏ dưới 128 byte để giảm tải cho RAM.
-    \item \textbf{Bộ dọn rác (Garbage Collector)}: Áp dụng cơ chế Copy-and-Compact tuần tự, kiểm tra liveness dễ dàng bằng con trỏ ngược $\langle\text{OTID}, \text{OTO}\rangle$ trong Object Table.
+    \item \textbf{Đơn vị quản lý (Granularity)}: Swap truyền thống chuyển đổi dữ liệu ở mức trang 4KB thô. SSDAlloc quản lý bộ nhớ ở mức đối tượng (object granularity), cho phép hệ thống chỉ nạp hoặc giải phóng chính xác đối tượng được ứng dụng yêu cầu, giải phóng tối đa băng thông I/O và tối ưu hóa DRAM.
+    \item \textbf{Đánh chặn lỗi trang (Page Fault Interception)}: Thay vì dựa hoàn toàn vào MMU phần cứng và Kernel để xử lý lỗi trang, SSDAlloc áp dụng mô hình \textbf{OPP (One-Page-per-Object)} và lệnh hệ thống \texttt{mprotect} để khóa các trang ảo của đối tượng đã giải phóng xuống SSD. Truy cập bất hợp lệ sẽ kích hoạt tín hiệu \texttt{SIGSEGV} được xử lý ngay tại User Space bởi thư viện SSDAlloc, dịch địa chỉ nhanh qua cây ATM (Address Translation Map) dạng nhị phân cân bằng thay vì duyệt Page Table của OS.
+    \item \textbf{Bộ đệm lai (Hybrid Buffer)}: Khác với Swap thông thường chỉ có một bộ đệm trang hệ thống, SSDAlloc chia DRAM thành hai vùng chuyên biệt: \textit{Page Buffer} (cửa sổ trượt chứa các trang thực tế phục vụ CPU xử lý trực tiếp) và \textit{RAM Object Cache} (chứa các đối tượng nén dạng LRU nhằm tối đa hóa số lượng đối tượng lưu trữ trong DRAM vật lý).
+    \item \textbf{Quản lý Ghi dữ liệu (Write Management)}: Thay vì ghi ngẫu nhiên từng trang 4KB gây tổn hại SSD, SSDAlloc tổ chức ghi dạng log-structured tuần tự. Hệ thống gom cụm (batching) các đối tượng nhỏ dưới 128 byte và căn hàng sector 512 byte trước khi ghi xuống đĩa, triệt tiêu đáng kể hiện tượng Write Amplification.
+    \item \textbf{Dọn rác (Garbage Collector)}: Thay vì giải phóng trang ngẫu nhiên của Swap thông thường, SSDAlloc sử dụng cơ chế \textit{Copy-and-Compact} tuần tự trên SSD. Việc kiểm tra tính sống sót (liveness) của đối tượng được thực hiện tức thì nhờ tra cứu cấu trúc con trỏ ngược $\langle\text{OTID}, \text{OTO}\rangle$ trong Object Table được lưu trực tiếp tại DRAM.
 \end{itemize}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\columnwidth]{ssdalloc.png}
+    \includegraphics[width=0.75\columnwidth]{ssdalloc.png}
     \caption{Kiến trúc tổng quan ba tầng của hệ thống SSDAlloc.}
     \label{fig:ssdalloc_arch}
 \end{figure}
-
-\subsection{Vận hành và Hiệu năng}
-SSDAlloc đánh chặn lỗi trang để thực hiện hiện thực hóa (materialize) hoặc hủy hiện thực hóa đối tượng. Hệ thống giúp tăng throughput lên đến 17 lần so với Swap thông thường và kéo dài tuổi thọ SSD tới 32 lần.
-
-\subsection{Ứng dụng Thực tế}
-Kiến trúc hybrid này đặc biệt hiệu quả trong các hệ thống phân tán lớn (Memcached, B+Tree) để xử lý tập dữ liệu hàng trăm GB trên cấu hình RAM hạn chế.
 
 \vfill\newpage
 
 \section{Phần 2: Cache Đa cấp (Multilevel Cache)}
 
-\subsection{Cấu trúc Phân cấp Bộ nhớ}
-Để tối ưu hóa cả tốc độ và dung lượng, các kiến trúc sư máy tính sử dụng nhiều tầng cache giữa CPU và RAM:
+\subsection{Cấu trúc Phân cấp Bộ nhớ đệm}
+Trong kiến trúc hiện đại, bộ nhớ đệm được tổ chức thành hệ thống phân cấp nhằm cân bằng giữa tốc độ và dung lượng:
 \begin{itemize}
-    \item \textbf{L1 Cache}: Nhỏ nhất, nhanh nhất, nằm ngay trong lõi CPU.
-    \item \textbf{L2 Cache}: Dung lượng lớn hơn, độ trễ cao hơn L1 một chút.
-    \item \textbf{L3 Cache}: Thường được chia sẻ giữa tất cả các lõi.
+    \item \textbf{L1 Cache}: Nằm trực tiếp trong nhân CPU, dung lượng nhỏ (32-128 KB) nhưng tốc độ cực nhanh.
+    \item \textbf{L2 Cache}: Đóng vai trò đệm cho L1, dung lượng lớn hơn (đến 2 MB).
+    \item \textbf{L3 Cache}: Thường được chia sẻ chung giữa tất cả các nhân xử lý, giữ vai trò "chốt chặn" trước khi dữ liệu phải truy xuất từ RAM.
 \end{itemize}
 
-\subsection{Chính sách Inclusivity (Bao hàm)}
-Việc quản lý dữ liệu giữa các cấp cache tuân theo các chính sách chính: \textit{Inclusive}, \textit{Exclusive}, và \textit{Non-inclusive}.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{memory_hierarchy_diagram.png}
+    \caption{Sơ đồ phân cấp bộ nhớ trong hệ thống máy tính.}
+    \label{fig:memory_hierarchy}
+\end{figure}
 
-\subsection{Tối ưu hóa Hiệu năng qua Cache Đa cấp}
-Hiệu năng được đo bằng AMAT:
+
+\subsection{Cơ chế Ánh xạ và Quản lý dữ liệu}
+\begin{itemize}
+    \item \textbf{Address Mapping (Ánh xạ địa chỉ):} Sử dụng các trường logic như \textit{Index, Tag, Offset} để định vị nhanh khối dữ liệu.
+    \item \textbf{Nguyên lý Cục bộ (Principle of Locality):} Cache giữ lại dữ liệu dựa trên cục bộ thời gian (truy cập lại dữ liệu vừa dùng) và cục bộ không gian (truy cập các dữ liệu lân cận). Thuật toán phổ biến là LRU.
+    \item \textbf{Chính sách ghi:} Kỹ thuật \textit{Write-back} được sử dụng phổ biến để giảm lượt ghi không cần thiết xuống RAM.
+\end{itemize}
+
+\subsection{Che giấu độ trễ và Ứng dụng Phân tán}
+\textbf{Latency Hiding:} Hệ thống Cache đa tầng giúp che giấu độ trễ truy cập RAM, kéo giảm thời gian truy cập trung bình (AMAT) và hạn chế CPU bị rơi vào trạng thái chờ (stall). 
+
+\textbf{Ứng dụng Phân tán:} Ở quy mô mạng (WAN), Caching được hiện thực thông qua các mạng phân phối nội dung (CDN như Cloudflare, Akamai). Máy chủ Edge đóng vai trò làm Cache, đưa nội dung đến gần người dùng nhất nhằm triệt tiêu độ trễ truyền tải.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\columnwidth]{Distribute-Caching/cache_notation.png}
+    \caption{Các ký hiệu dùng trong mô hình toán học đánh giá hiệu năng Cache đa tầng.}
+    \label{fig:cache_notation}
+\end{figure}
+Dựa trên các tham số học thuật đó, công thức Thời gian truy cập trung bình (AMAT - Average Memory Access Time) đối với kiến trúc Cache 2 tầng được tính bằng:
 \[
 \text{AMAT} = \text{T}_1 + \text{MR}_1 \times (\text{T}_2 + \text{MR}_2 \times \text{T}_{\text{memory}})
 \]
-
-\subsection{Xu hướng hiện đại: L4 Cache và HBM}
-Sử dụng bộ nhớ băng thông cao (HBM) ngay trên đế chip để tạo ra một tầng đệm khổng lồ.
+Trong đó $\text{T}_1, \text{T}_2$ là thời gian truy cập (Hit Time) và $\text{MR}_1, \text{MR}_2$ là tỷ lệ trượt (Miss Rate) tương ứng của Cache L1 và L2. Tầng Cache càng sâu, Miss Penalty (hình phạt trượt) càng giảm, giúp triệt tiêu trạng thái chờ (stall) của CPU.
 
 \section{Phần 3: Nạp trước dữ liệu (Precaching)}
 
