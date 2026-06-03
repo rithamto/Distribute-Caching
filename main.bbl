@@ -5,4 +5,23 @@ Anirudh Badam and Vivek~S Pai.
 \newblock Ssdalloc: Hybrid ssd/ram memory management made easy.
 \newblock In {\em NSDI}, volume~11, pages 1--1, 2011.
 
+\bibitem{xie2024zipcache}
+Rui Xie, Linsen Ma, Alex Zhong, Feng Chen, and Tong Zhang.
+\newblock {ZipCache}: A dram/ssd cache with built-in transparent compression.
+\newblock In {\em Proceedings of the International Symposium on Memory Systems
+  (MEMSYS)}, pages 1--13, 2024.
+
+\bibitem{mahling2025fetch}
+Fabian Mahling, Marcel Weisgut, and Tilmann Rabl.
+\newblock Fetch me if you can: Evaluating cpu cache prefetching and its
+  reliability on high latency memory.
+\newblock In {\em Proceedings of the 21st International Workshop on Data
+  Management on New Hardware (DaMoN)}, 2025.
+
+\bibitem{wilson1999compressed}
+Paul~R Wilson, Scott~F Kaplan, and Yannis Smaragdakis.
+\newblock The case for compressed caching in virtual memory systems.
+\newblock In {\em Proceedings of the USENIX Annual Technical Conference}, pages
+  519--529, 1999.
+
 \end{thebibliography}

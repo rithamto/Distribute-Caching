@@ -13,23 +13,33 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Kiến trúc và Cơ chế Hoạt động của SSDAlloc so với Swap Truyền thống}{1}{subsection.2.2}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Kiến trúc tổng quan ba tầng của hệ thống SSDAlloc.}}{1}{figure.1}\protected@file@percent }
 \newlabel{fig:ssdalloc_arch}{{1}{1}{Kiến trúc tổng quan ba tầng của hệ thống SSDAlloc}{figure.1}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3}Phần 2: Cache Đa cấp (Multilevel Cache)}{2}{section.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Cấu trúc Phân cấp Bộ nhớ đệm}{2}{subsection.3.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Sơ đồ phân cấp bộ nhớ trong hệ thống máy tính.}}{2}{figure.2}\protected@file@percent }
-\newlabel{fig:memory_hierarchy}{{2}{2}{Sơ đồ phân cấp bộ nhớ trong hệ thống máy tính}{figure.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Cơ chế Ánh xạ và Quản lý dữ liệu}{2}{subsection.3.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Che giấu độ trễ và Ứng dụng Phân tán}{2}{subsection.3.3}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Các ký hiệu dùng trong mô hình toán học đánh giá hiệu năng Cache đa tầng.}}{2}{figure.3}\protected@file@percent }
-\newlabel{fig:cache_notation}{{3}{2}{Các ký hiệu dùng trong mô hình toán học đánh giá hiệu năng Cache đa tầng}{figure.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {4}Phần 3: Nạp trước dữ liệu (Precaching)}{2}{section.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Nguyên lý của Precaching}{2}{subsection.4.1}\protected@file@percent }
+\citation{xie2024zipcache}
+\citation{mahling2025fetch}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Phần 2: Cache Đa cấp và ZipCache (Multilevel Caching)}{2}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Kiến trúc Cache Đa cấp Lai (Hybrid DRAM-SSD Cache)}{2}{subsection.3.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Tổng quan kiến trúc ZipCache.}}{2}{figure.2}\protected@file@percent }
+\newlabel{fig:zipcache_overview}{{2}{2}{Tổng quan kiến trúc ZipCache}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Các rào cản kỹ thuật của Cache Đa cấp truyền thống}{2}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Tối ưu hóa trong ZipCache và Đánh giá}{2}{subsection.3.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces So sánh Throughput \& Hit Ratio của ZipCache.}}{2}{figure.3}\protected@file@percent }
+\newlabel{fig:throughput_hitratio}{{3}{2}{So sánh Throughput \& Hit Ratio của ZipCache}{figure.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Phần 3: Nạp trước dữ liệu (Software Prefetching)}{2}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Nguyên lý của Prefetching}{2}{subsection.4.1}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Phân loại Kỹ thuật Prefetching}{2}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Lợi ích và Rủi ro}{2}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Độ Tin Cậy Prefetching trên Bộ nhớ Độ Trễ Cao}{2}{subsection.4.4}\protected@file@percent }
+\citation{wilson1999compressed}
 \bibdata{sample}
 \bibcite{badam2011ssdalloc}{{1}{}{{}}{{}}}
-\bibstyle{plain}
+\bibcite{xie2024zipcache}{{2}{}{{}}{{}}}
+\bibcite{mahling2025fetch}{{3}{}{{}}{{}}}
+\bibcite{wilson1999compressed}{{4}{}{{}}{{}}}
+\bibstyle{unsrt}
 \providecommand\NAT@force@numbers{}\NAT@force@numbers
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Lợi ích và Rủi ro}{3}{subsection.4.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Ứng dụng trong Web Caching và CDN(Content Delivery Network)}{3}{subsection.4.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Phần 4: [Tên chủ đề phần 4]}{3}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Ứng dụng trong Web Caching và CDN}{3}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Phần 4: Nén Dữ liệu (Compressed Caching)}{3}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Động lực và Kiến trúc}{3}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Các Thuật toán Nén}{3}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Thích ứng Động}{3}{subsection.5.3}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {6}Kết luận}{3}{section.6}\protected@file@percent }
 \gdef \@abspage@last{3}

@@ -19,7 +19,7 @@
 \usepackage{float}
 
 \title{\Large \textbf{Các Phương pháp Tối ưu hóa Cache}}
-\author{[Đỗ Hữu Khang, Lê Đinh Ngọc Thành, 3, 4]}
+\author{[Đỗ Hữu Khang, Lê Đinh Ngọc Thành, Châu Thị Diễm Phúc, 4]}
 \date{University of Transport HoChiMinh City}
 
 \begin{document}
@@ -55,51 +55,50 @@ Nghiên cứu từ Đại học Princeton đề xuất \textbf{SSDAlloc} \cite{b
 
 \vfill\newpage
 
-\section{Phần 2: Cache Đa cấp (Multilevel Cache)}
+\section{Phần 2: Cache Đa cấp và ZipCache (Multilevel Caching)}
+\textit{Trong khi SSDAlloc giúp giải quyết hiệu quả bài toán dung lượng, kiến trúc Cache đa cấp kết hợp nén dữ liệu ở Phần 2 sẽ là mảnh ghép tiếp theo để bứt phá giới hạn về tốc độ truy xuất. Xie et al. \cite{xie2024zipcache} đề xuất ZipCache - giải pháp hybrid DRAM/SSD tích hợp nén dữ liệu trong suốt.}
 
-\subsection{Cấu trúc Phân cấp Bộ nhớ đệm}
-Trong kiến trúc hiện đại, bộ nhớ đệm được tổ chức thành hệ thống phân cấp nhằm cân bằng giữa tốc độ và dung lượng:
+\subsection{Kiến trúc Cache Đa cấp Lai (Hybrid DRAM-SSD Cache)}
+Mô hình Hybrid DRAM-SSD Cache gồm: \textbf{Tầng 1 (DRAM)} tốc độ cực nhanh nhưng đắt đỏ và giới hạn dung lượng; \textbf{Tầng 2 (SSD)} dung lượng khổng lồ, giá rẻ nhưng chậm hơn. Mục tiêu là nén dữ liệu để giữ tối đa dữ liệu "nóng" trên RAM, che giấu độ trễ của SSD (ZipCache - Hình \ref{fig:zipcache_overview}).
+
+\begin{figure}[htbp]
+    \centering
+    \caption{Tổng quan kiến trúc ZipCache.}
+    \label{fig:zipcache_overview}
+\end{figure}
+
+\subsection{Các rào cản kỹ thuật của Cache Đa cấp truyền thống}
 \begin{itemize}
-    \item \textbf{L1 Cache}: Nằm trực tiếp trong nhân CPU, dung lượng nhỏ (32-128 KB) nhưng tốc độ cực nhanh.
-    \item \textbf{L2 Cache}: Đóng vai trò đệm cho L1, dung lượng lớn hơn (đến 2 MB).
-    \item \textbf{L3 Cache}: Thường được chia sẻ chung giữa tất cả các nhân xử lý, giữ vai trò "chốt chặn" trước khi dữ liệu phải truy xuất từ RAM.
+    \item \textbf{Mất Cục bộ (Locality):} Hash Index phân tán dữ liệu ngẫu nhiên, giảm hiệu quả nén.
+    \item \textbf{Khuếch đại Đọc/Ghi (Read/Write Amplification):} Gom các Key-Value nhỏ thành khối 4KB để nén khiến hệ thống phải đọc/ghi toàn khối chỉ để lấy 1 byte.
+    \item \textbf{Độ trễ \& Tốn CPU:} Nén/giải nén liên tục khối dữ liệu lớn đi ngược lại tiêu chí "độ trễ thấp" của Cache.
 \end{itemize}
+
+\subsection{Tối ưu hóa trong ZipCache và Đánh giá}
+Kiến trúc ZipCache giải quyết triệt để các rào cản thông qua sự kết hợp giữa thuật toán và phần cứng chuyên dụng:
+\begin{enumerate}
+    \item \textbf{B+ Tree thay cho Hash Index:} Giữ các đối tượng liền kề nằm cạnh nhau, bảo toàn tính cục bộ, tăng tỷ lệ nén gấp đôi.
+    \item \textbf{Kết thúc giải nén sớm (Early Termination):} Node lá chia thành các trang con (sub-pages). CPU định vị và chỉ giải nén một góc nhỏ chứa dữ liệu rồi dừng lại, triệt tiêu độ trễ.
+    \item \textbf{Super-leaf page trên Computational SSD:} Đẩy toàn bộ gánh nặng nén dữ liệu xuống phần cứng SSD chuyên dụng (CSD), tự động nén từng trang 4KB một cách trong suốt.
+\end{enumerate}
+
+\textbf{Đánh giá Hiệu năng:} Nhờ tỷ lệ nén cao, Hit Rate trên RAM tăng mạnh. Thực nghiệm cho thấy Throughput tăng tối đa 72.4\% và Latency giảm 42.4\% (Hình \ref{fig:throughput_hitratio}). Đồng thời, việc đẩy tác vụ nén xuống SSD tính toán giúp giảm khuếch đại ghi tới 26.2 lần, bảo vệ và kéo dài tuổi thọ ổ cứng.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\columnwidth]{memory_hierarchy_diagram.png}
-    \caption{Sơ đồ phân cấp bộ nhớ trong hệ thống máy tính.}
-    \label{fig:memory_hierarchy}
+    \caption{So sánh Throughput \& Hit Ratio của ZipCache.}
+    \label{fig:throughput_hitratio}
 \end{figure}
 
 
-\subsection{Cơ chế Ánh xạ và Quản lý dữ liệu}
-\begin{itemize}
-    \item \textbf{Address Mapping (Ánh xạ địa chỉ):} Sử dụng các trường logic như \textit{Index, Tag, Offset} để định vị nhanh khối dữ liệu.
-    \item \textbf{Nguyên lý Cục bộ (Principle of Locality):} Cache giữ lại dữ liệu dựa trên cục bộ thời gian (truy cập lại dữ liệu vừa dùng) và cục bộ không gian (truy cập các dữ liệu lân cận). Thuật toán phổ biến là LRU.
-    \item \textbf{Chính sách ghi:} Kỹ thuật \textit{Write-back} được sử dụng phổ biến để giảm lượt ghi không cần thiết xuống RAM.
-\end{itemize}
+\textbf{Kết luận:} ZipCache là minh chứng cho thấy tối ưu Cache đa cấp hiện đại đòi hỏi sự đồng bộ hóa hoàn hảo giữa Cấu trúc chỉ mục phần mềm và Phần cứng chuyên dụng.
 
-\subsection{Che giấu độ trễ và Ứng dụng Phân tán}
-\textbf{Latency Hiding:} Hệ thống Cache đa tầng giúp che giấu độ trễ truy cập RAM, kéo giảm thời gian truy cập trung bình (AMAT) và hạn chế CPU bị rơi vào trạng thái chờ (stall). 
+\section{Phần 3: Nạp trước dữ liệu (Software Prefetching)}
+\textit{Nếu việc tối ưu Cache đa cấp ở Phần 2 mang tính chất phản hồi thụ động, thì cơ chế nạp trước dữ liệu (Prefetching) ở Phần 3 chính là bước tiến chủ động nhằm triệt tiêu hoàn toàn thời gian chờ của bộ vi xử lý.}
 
-\textbf{Ứng dụng Phân tán:} Ở quy mô mạng (WAN), Caching được hiện thực thông qua các mạng phân phối nội dung (CDN như Cloudflare, Akamai). Máy chủ Edge đóng vai trò làm Cache, đưa nội dung đến gần người dùng nhất nhằm triệt tiêu độ trễ truyền tải.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\columnwidth]{Distribute-Caching/cache_notation.png}
-    \caption{Các ký hiệu dùng trong mô hình toán học đánh giá hiệu năng Cache đa tầng.}
-    \label{fig:cache_notation}
-\end{figure}
-Dựa trên các tham số học thuật đó, công thức Thời gian truy cập trung bình (AMAT - Average Memory Access Time) đối với kiến trúc Cache 2 tầng được tính bằng:
-\[
-\text{AMAT} = \text{T}_1 + \text{MR}_1 \times (\text{T}_2 + \text{MR}_2 \times \text{T}_{\text{memory}})
-\]
-Trong đó $\text{T}_1, \text{T}_2$ là thời gian truy cập (Hit Time) và $\text{MR}_1, \text{MR}_2$ là tỷ lệ trượt (Miss Rate) tương ứng của Cache L1 và L2. Tầng Cache càng sâu, Miss Penalty (hình phạt trượt) càng giảm, giúp triệt tiêu trạng thái chờ (stall) của CPU.
-
-\section{Phần 3: Nạp trước dữ liệu (Precaching)}
-
-\subsection{Nguyên lý của Precaching}
-Dự đoán các dữ liệu hoặc lệnh mà CPU sẽ cần trong tương lai gần và nạp chúng vào cache trước khi chúng thực sự được yêu cầu, giúp giảm thời gian chờ đợi dữ liệu từ bộ nhớ chính, từ đó tăng tốc hiệu suất tổng thể
+\subsection{Nguyên lý của Prefetching}
+Dự đoán các dữ liệu hoặc lệnh mà CPU sẽ cần trong tương lai gần và nạp chúng vào cache trước khi chúng thực sự được yêu cầu, giúp giảm thời gian chờ đợi dữ liệu từ bộ nhớ chính, từ đó tăng tốc hiệu suất tổng thể.
+Hai nguyên lý chính là Spatial Locality và Temporal Locality.
 
 \subsection{Phân loại Kỹ thuật Prefetching}
 \begin{enumerate}
@@ -114,18 +113,36 @@ Dự đoán các dữ liệu hoặc lệnh mà CPU sẽ cần trong tương lai 
 \text{Các chỉ số đánh giá Prefetching được kể đến:} Coverage, Accuracy, Timeliness, Lateness, Pollution
 \textbf{Rủi ro}: \textit{Cache Pollution} (làm bẩn cache) nếu dự đoán sai tốn băng thông bộ nhớ, Prefetch sớm dữ liệu bị đẩy ra khỏi cache trước khi dùng, ngược lại Prefetch muộn sẽ không giảm được độ trễ.
 
-\subsection{Ứng dụng trong Web Caching và CDN(Content Delivery Network)}
+\subsection{Độ Tin Cậy Prefetching trên Bộ nhớ Độ Trễ Cao}
+Prefetch là gợi ý, không bắt buộc. Mahling et al. \cite{mahling2025fetch} phát hiện rằng khi bộ nhớ đặt trên các công nghệ khác nhau (DDR, HBM, CXL), khả năng tiền nạp của CPU không đồng đều.
+
+Khi CPU fill buffers (FB) đầy: \textbf{Weak Reliability} - loại bỏ prefetch mới, tiếp tục thực thi; \textbf{Strong Reliability} - stall đến khi FB trống, đảm bảo prefetch. Đo trên B+-Tree và binary search với dữ liệu local: speedup 1.1-1.9×. Khi remote socket (270ns):
+\begin{itemize}
+    \item \textbf{AMD EPYC (Weak)}: Speedup 1.1-2×, CPU tự drop prefetch thừa.
+    \item \textbf{Intel Xeon (Strong)}: Speedup 1.3-2.6× nhưng 8KB node = 128 cache lines > 12-line FB = stall, giảm hiệu năng tới 2.5× trên một số kích thước.
+\end{itemize}
+Kết luận: Strong tốt local, nguy hiểm remote. Cần tuning động dựa vào vị trí dữ liệu. Với CXL Memory (760ns), CPU cần hỗ trợ tuning prefetch reliability động.
+
+\subsection{Ứng dụng trong Web Caching và CDN}
 Các trình duyệt và CDN tối ưu hoá việc sử dụng tài nguyên, nâng cao hiệu suất bằng cách giảm độ trễ và tăng tốc độ phân phối nội dung, giúp trải nghiệm người dùng tốt hơn. 
 
-\section{Phần 4: [Tên chủ đề phần 4]}
+\section{Phần 4: Nén Dữ liệu (Compressed Caching)}
+\textit{Nếu Phần 3 tối ưu hoá tìm nạp chủ động, Phần 4 tối ưu hoá dung lượng bằng nén dữ liệu, cho phép giữ nhiều dữ liệu hơn trong DRAM.}
 
-\textit{(Nội dung phần này hiện đang để trống)}
+\subsection{Động lực và Kiến trúc}
+Tốc độ CPU tăng 60\% hàng năm nhưng độ trễ đĩa chỉ 20\%, tạo khoảng trống ngày càng lớn. Compressed Caching tận dụng tính nén được của dữ liệu: chia DRAM thành hai tầng - Uncompressed (dữ liệu nóng, truy cập trực tiếp) và Compressed (dữ liệu ấm, nén để tiết kiệm không gian). Hệ thống tự động di chuyển dữ liệu dựa trên mô hình LRU.
+
+\subsection{Các Thuật toán Nén}
+Wilson et al. \cite{wilson1999compressed} so sánh ba thuật toán: \textbf{WKdm} (quét 32-bit, từ điển 16 mẫu, tỷ lệ 2:1, độ trễ 0.25ms - tối ưu cho in-memory data); \textbf{LZO} (Lempel-Ziv, tỷ lệ cao hơn nhưng chậm 20\%); \textbf{LZRW1} (Lempel-Ziv đơn giản, kém hiệu quả).
+
+\subsection{Thích ứng Động}
+Hệ thống ước tính: $\text{Speedup} = \frac{T_{\text{Disk}}}{T_{\text{Compress}} + T_{\text{Decompress}}}$. Nếu $\text{Speedup} > 1$, tăng vùng nén; ngược lại, giảm. Kết hợp với Software Prefetch (Phần 3): phần mềm dự đoán và giải nén trước, che giấu độ trễ. Thực nghiệm tiết kiệm 30-70\% thời gian paging, tương đương DRAM gấp 2-3 lần dung lượng vật lý.
 
 \section{Kết luận}
 
-Tối ưu hóa cache là một quá trình đa tầng. Việc kết hợp linh hoạt các phương pháp giúp hệ thống hiện đại đạt được hiệu năng tối ưu, đáp ứng nhu cầu của các ứng dụng phức tạp.
+Tối ưu hoá cache hiện đại đòi hỏi sự kết hợp toàn diện giữa bốn công nghệ chính: (1) quản lý bộ nhớ ảo linh hoạt và hỗ trợ SSD (SSDAlloc), (2) kiến trúc cache đa cấp tích hợp nén dữ liệu (ZipCache), (3) nạp trước dữ liệu chủ động với tuning độ tin cậy động (Software Prefetching), và (4) nén dữ liệu thích ứng (Compressed Caching). Các công nghệ này khi được phối hợp hài hòa sẽ tạo nên một "hệ thống bộ nhớ tổng hợp" có khả năng che giấu hoàn toàn độ trễ truy cập, cho phép ứng dụng hiện đại chạy với hiệu suất gần tối ưu dù dữ liệu phải lưu trữ trên các tầng bộ nhớ phức tạp.
 
 \bibliography{sample}
-\bibliographystyle{plain}
+\bibliographystyle{unsrt}
 
 \end{document}
