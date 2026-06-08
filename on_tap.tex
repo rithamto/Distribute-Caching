@@ -1,0 +1,561 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\title{Tổng Hợp Kiến Thức Và Hỏi Đáp (Q\&A)\\ Hệ Thống Bộ Nhớ và Lưu Trữ}
+\author{Tài liệu ôn tập vấn đáp}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Bài 1: ZipCache - Hệ thống Cache lai DRAM/SSD tích hợp Nén Dữ Liệu}
+
+\subsection{Tóm tắt kiến thức cốt lõi}
+
+\textbf{1. Bối cảnh và Động lực:}
+\begin{itemize}
+    \item Key-value cache đóng vai trò cực kỳ quan trọng trong việc cung cấp truy xuất dữ liệu tốc độ cao, độ trễ thấp tại các trung tâm dữ liệu. Tuy nhiên, việc tăng dung lượng bộ nhớ (DRAM) gặp phải các giới hạn thực tế về chi phí phần cứng, tiêu thụ điện năng và không gian máy chủ.
+    \item \textbf{Nén dữ liệu (Compression)} là một giải pháp trực quan để mở rộng sức chứa bộ nhớ một cách ảo hóa. Tuy nhiên, nén ít được sử dụng trong key-value cache do 4 rào cản: (1) Cấu trúc Hash index truyền thống khiến dữ liệu bị phân mảnh ngẫu nhiên, không thân thiện với việc nén; (2) Các bản ghi kích thước nhỏ gây ra hiện tượng khuếch đại đọc/ghi (read/write amplification) lớn khi ghép lại để nén; (3) Việc giải nén tốn thời gian; (4) Ngốn quá nhiều tài nguyên CPU làm ảnh hưởng tiến trình chính.
+\end{itemize}
+
+\textbf{2. Thiết kế của ZipCache:}
+ZipCache là một hệ thống hybrid DRAM/SSD cache giải quyết toàn diện các vấn đề trên thông qua việc thiết kế lại cấu trúc quản lý:
+\begin{itemize}
+    \item \textbf{Sử dụng B+ Tree thay cho Hash Index:} ZipCache loại bỏ Hash index và dùng B+ Tree để quản lý cả DRAM và SSD cache. B+ Tree giúp sắp xếp các key gần nhau về mặt giá trị nằm ở cùng một vị trí vật lý (bảo toàn spatial locality), giúp thuật toán nén đạt tỷ lệ cao hơn (hơn gấp 2 lần so với Hash).
+    \item \textbf{Phân loại đối tượng:} Dữ liệu được chia thành \textit{tiny} (rất nhỏ), \textit{medium} (trung bình), và \textit{large} (lớn). Dữ liệu lớn luôn nằm trên SSD, dữ liệu tiny và medium có thể chuyển đổi giữa DRAM và SSD.
+\end{itemize}
+
+\textbf{3. Các tối ưu hóa trên DRAM (Tầng DRAM Cache):}
+\begin{itemize}
+    \item \textbf{Decompression Early Termination (Chấm dứt giải nén sớm):} Sử dụng hàm băm nội trang để biết chính xác bản ghi cần tìm nằm ở sub-page nào trong khối nén, do đó quá trình quét giải nén có thể dừng lại sớm, giảm độ trễ đọc.
+    \item \textbf{Adaptive Compression Bypassing (Bỏ qua nén thích ứng):} Với các trang dữ liệu cực "nóng" (được truy cập liên tục), hệ thống sẽ không nén để tránh phí overhead của CPU.
+    \item \textbf{Per-page Write Buffering:} Dùng bộ đệm ghi để gộp nhiều lệnh cập nhật nhỏ vào một thao tác giải nén-chỉnh sửa-nén (decompression-modify-compression), giúp giảm đáng kể write amplification trên DRAM.
+\end{itemize}
+
+\textbf{4. Các tối ưu hóa trên SSD (Tầng SSD Cache):}
+ZipCache sử dụng ổ SSD điện toán (Computational SSD như ScaleFlux CSD3000) có phần cứng nén dữ liệu trong suốt (in-storage transparent compression).
+\begin{itemize}
+    \item \textbf{Intra-page Object Hashing (Super-leaf):} Trang B+ Tree trên SSD (có thể lên tới 64KB) được chia làm các sub-page 4KB thông qua hàm băm. Khi đọc/ghi, máy chủ chỉ cần tác động lên 1 khối 4KB duy nhất, giải quyết bài toán khuếch đại I/O của B+ Tree truyền thống trên ổ cứng.
+    \item \textbf{Page-based Eviction:} Thay vì đuổi từng đối tượng từ DRAM xuống SSD, ZipCache đuổi cả cụm (trang) B+ Tree để tăng tuần tự I/O và tối ưu nén trên ổ.
+    \item \textbf{Sub-page Under-filling:} Chủ động chừa lại không gian (điền số 0) vào các sub-page. Khi ghi xuống SSD, phần cứng nén sẽ dễ dàng loại bỏ các số 0 này, tăng hệ số nén và giảm \textit{SSD write amplification}.
+\end{itemize}
+
+\textbf{5. Hiệu năng (Đánh giá):}
+\begin{itemize}
+    \item Thông lượng (Throughput) cao hơn tới 72.4\% và độ trễ giảm 42.4\% so với các hệ thống tiên tiến như CacheLib và xcache.
+    \item Giảm thiểu hiện tượng khuếch đại ghi trên SSD (SSD Write Amplification) lên tới 26.2 lần.
+\end{itemize}
+
+\subsection{Câu hỏi vấn đáp (Q\&A) gợi ý}
+
+\begin{enumerate}
+    \item \textbf{Hỏi:} Động lực chính để áp dụng nén dữ liệu vào bộ nhớ đệm (key-value cache) là gì? \\
+    \textbf{Đáp:} Để nới rộng không gian lưu trữ (capacity) của cache một cách ảo hóa, giảm nhu cầu mua thêm RAM đắt đỏ mà vẫn đảm bảo hit-ratio cao.
+    
+    \item \textbf{Hỏi:} Tại sao các hệ thống key-value cache truyền thống hiếm khi tích hợp nén dữ liệu? \\
+    \textbf{Đáp:} Do 4 nguyên nhân: Hash index phân mảnh dữ liệu (kém nén), khuếch đại đọc/ghi khi nén khối lớn, giải nén nguyên khối lãng phí và chiếm quá nhiều tài nguyên CPU làm giảm thông lượng.
+    
+    \item \textbf{Hỏi:} ZipCache đã thay thế Hash Index bằng cấu trúc nào và tại sao? \\
+    \textbf{Đáp:} Dùng B+ Tree. Vì B+ Tree lưu trữ các phần tử có khóa (key) giống/gần nhau nằm cạnh nhau (spatial locality), giúp tăng sự tương đồng về chuỗi byte, từ đó tăng tỷ lệ nén lên gấp đôi.
+    
+    \item \textbf{Hỏi:} ZipCache giải quyết bài toán tài nguyên CPU bị nghẽn khi nén/giải nén như thế nào? \\
+    \textbf{Đáp:} ZipCache chia làm 2 tầng: DRAM và SSD. Tại tầng SSD, ZipCache dùng ổ Computational SSD (CSD) có phần cứng chuyên dụng để "offload" công việc nén khỏi CPU chủ. Tại DRAM, dùng các kỹ thuật giảm nhẹ như Bypassing và Early Termination.
+    
+    \item \textbf{Hỏi:} Kỹ thuật "Decompression Early Termination" hoạt động theo nguyên lý nào? \\
+    \textbf{Đáp:} Các bản ghi trong một trang lá (leaf page) được băm (hash) vào các phân vùng phụ (sub-page). Khi tìm kiếm, CPU tính hash để biết sub-page chứa dữ liệu, và quá trình giải nén chuỗi nén LZ sẽ dừng lại ngay khi đến được sub-page đó thay vì giải nén hết cả block.
+    
+    \item \textbf{Hỏi:} Kỹ thuật "Adaptive Compression Bypassing" giải quyết vấn đề gì? \\
+    \textbf{Đáp:} Tránh overhead cho CPU khi phải nén/giải nén liên tục các trang cực "nóng" (hot data). Các trang này sẽ được lưu ở trạng thái không nén trong DRAM.
+    
+    \item \textbf{Hỏi:} "Per-page write buffering" trong ZipCache đóng vai trò gì? \\
+    \textbf{Đáp:} Khi cập nhật nhiều dữ liệu nhỏ vào một trang nén, thay vì giải nén/nén lại liên tục, buffer sẽ gom nhóm các thay đổi và thực hiện nén lại (re-compression) một lần dưới nền (background).
+    
+    \item \textbf{Hỏi:} Cấu trúc "Super-leaf" ở tầng SSD Cache là gì? \\
+    \textbf{Đáp:} Đây là một trang B+ Tree kích thước lớn (VD 64KB) được chia thành nhiều khối LBA 4KB dựa trên hàm băm. Cách này giúp tách biệt kích thước logic của cây B+ Tree và kích thước I/O vật lý của SSD, tránh khuếch đại đọc/ghi.
+    
+    \item \textbf{Hỏi:} ZipCache đuổi dữ liệu (eviction) từ DRAM xuống SSD theo đơn vị nào? \\
+    \textbf{Đáp:} Theo đơn vị Trang (Page-based), cụ thể là các leaf-page của cây B+ Tree trên DRAM.
+    
+    \item \textbf{Hỏi:} Lợi ích của Page-based eviction so với đuổi từng đối tượng (object-based) là gì? \\
+    \textbf{Đáp:} Page-based gom nhiều dữ liệu nhỏ có key liền kề lại, tạo ra tuần tự ghi lớn hơn cho SSD, giúp giảm thiểu host-side write amplification (khuếch đại ghi từ phía máy chủ).
+    
+    \item \textbf{Hỏi:} "Sub-page under-filling" là kỹ thuật gì? \\
+    \textbf{Đáp:} Là kỹ thuật chủ động không điền đầy dữ liệu vào khối 4KB mà để lại một phần chứa toàn số 0 (zero-padding). 
+    
+    \item \textbf{Hỏi:} Tại sao phải bơm số 0 vào sub-page trên SSD? \\
+    \textbf{Đáp:} Vì phần cứng CSD sẽ dễ dàng nén triệt để các chuỗi số 0 này, giúp giảm lượng dữ liệu thực tế ghi vào chip NAND (tăng intra-SSD write reduction), qua đó kéo dài tuổi thọ SSD.
+    
+    \item \textbf{Hỏi:} Trong ZipCache, đối tượng (object) được chia thành mấy loại kích thước? \\
+    \textbf{Đáp:} Ba loại: tiny (rất nhỏ), medium (vừa), và large (lớn).
+    
+    \item \textbf{Hỏi:} ZipCache xử lý các đối tượng kích thước lớn (large-size) như thế nào? \\
+    \textbf{Đáp:} Luôn được lưu trên SSD (SSD-resident) và chỉ lưu pointer trên DRAM để tiết kiệm dung lượng DRAM.
+    
+    \item \textbf{Hỏi:} Có bao nhiêu cây B+ Tree được duy trì trong ZipCache? \\
+    \textbf{Đáp:} Ba cây: $BT_{DRAM}$ quản lý dữ liệu nhỏ/vừa trên DRAM, $BT_{SSD}$ quản lý dữ liệu nhỏ/vừa trên SSD, và $BT_{LO}$ quản lý đối tượng lớn.
+    
+    \item \textbf{Hỏi:} Tombstone object trong hệ thống dùng để làm gì? \\
+    \textbf{Đáp:} Khi có lệnh DELETE hoặc ghi đè, một tombstone được chèn vào DRAM để báo hiệu dữ liệu cũ (có thể đang nằm ở SSD) đã bị xoá, ngăn chặn việc đọc phải dữ liệu cũ.
+    
+    \item \textbf{Hỏi:} Quy trình xử lý lệnh GET trong ZipCache diễn ra như thế nào? \\
+    \textbf{Đáp:} Tìm kiếm trên $BT_{DRAM}$, nếu không có thì tìm $BT_{LO}$, cuối cùng mới tìm $BT_{SSD}$. Thứ tự này đảm bảo SSD chỉ bị truy cập tối đa một lần.
+    
+    \item \textbf{Hỏi:} Tại sao $BT_{SSD}$ (B+ Tree cho SSD) lại chỉ lưu lá (leaf pages) trên SSD? \\
+    \textbf{Đáp:} Để tăng tốc độ, toàn bộ các trang nội bộ (non-leaf pages) của $BT_{SSD}$ được giữ trên DRAM, đảm bảo mỗi lần tra cứu SSD chỉ cần đọc 1 lần.
+    
+    \item \textbf{Hỏi:} Computational SSD (CSD) khác với SSD thông thường ở điểm nào trong hệ thống này? \\
+    \textbf{Đáp:} CSD có vi xử lý (SoC) tích hợp các phần cứng tăng tốc nén/giải nén (ví dụ thuật toán LZ4/Zlib) hoàn toàn tự động ở tốc độ dòng (line-rate) cực nhanh.
+    
+    \item \textbf{Hỏi:} Host-side write amplification được định nghĩa như thế nào? \\
+    \textbf{Đáp:} Bằng tỷ số giữa Tổng lượng dữ liệu máy chủ ghi xuống cổng I/O (NVMe) chia cho Tổng lượng dữ liệu thực sự cần thiết bị đuổi khỏi DRAM.
+    
+    \item \textbf{Hỏi:} ZipCache giải quyết bài toán \textit{spatial overhead} trên DRAM như thế nào khi phải giữ non-leaf pages của $BT_{SSD}$? \\
+    \textbf{Đáp:} Bằng cách tăng kích thước leaf-page của SSD lên rất lớn (super-leaf), số lượng node trung gian (non-leaf) sẽ giảm đi đáng kể, giúp ít tốn RAM hơn.
+    
+    \item \textbf{Hỏi:} Việc thay thế Hash bằng B+ Tree ảnh hưởng thế nào đến độ trễ tra cứu ban đầu trên DRAM? \\
+    \textbf{Đáp:} B+ tree tốn thời gian duyệt (traversing) lâu hơn Hash, nhưng nhờ tăng được hit-ratio và tối ưu giải nén (có Early Termination), độ trễ tổng thể lại giảm mạnh.
+    
+    \item \textbf{Hỏi:} Thuật toán nén mà bộ CSD 3000 thực hiện tương đương với chuẩn nén phần mềm nào? \\
+    \textbf{Đáp:} Tương đương với zlib library ở mức nén 6 (level 6).
+    
+    \item \textbf{Hỏi:} "Inclusive caching policy" được sử dụng trong ZipCache nghĩa là gì? \\
+    \textbf{Đáp:} Nghĩa là một key-value item có thể tồn tại đồng thời ở cả DRAM và SSD. Việc này giảm thiểu chi phí chuyển đổi (write amplification) khi đuổi/tải dữ liệu giữa 2 tầng.
+    
+    \item \textbf{Hỏi:} Tỷ lệ hit-ratio của ZipCache so với CacheLib khác biệt rõ nhất trong trường hợp workload có locality như thế nào? \\
+    \textbf{Đáp:} Khác biệt cực kỳ rõ ràng ở workload có locality thấp (Weak hoặc Zero locality), do nén dữ liệu giúp DRAM chứa được nhiều working-set hơn bình thường.
+    
+    \item \textbf{Hỏi:} Kangaroo (một biến thể của CacheLib) sử dụng WAL (Write-ahead log) để làm gì? \\
+    \textbf{Đáp:} Để giảm SSD write amplification bằng cách gộp nhiều đối tượng cùng băm vào một block 4KB trước khi ghi, nhưng lại làm ngốn tài nguyên lưu trữ và bộ nhớ để duy trì WAL.
+    
+    \item \textbf{Hỏi:} Tính nén được của nội dung dữ liệu (content compressibility) ảnh hưởng thế nào đến ZipCache? \\
+    \textbf{Đáp:} Compressibility càng cao, lượng dữ liệu vừa vào DRAM càng lớn, hit-ratio tăng, throughput tăng đột phá.
+    
+    \item \textbf{Hỏi:} ZipCache xử lý các leaf page trong $BT_{DRAM}$ bị hết không gian (do padding số 0 không đủ) như thế nào? \\
+    \textbf{Đáp:} Nó sẽ tự động phân tách (split) thành hai leaf page mới, mỗi trang chứa một nửa dữ liệu.
+    
+    \item \textbf{Hỏi:} Khi phục vụ một yêu cầu SCAN (quét dải dữ liệu), ZipCache làm gì? \\
+    \textbf{Đáp:} Nó phải quét toàn bộ qua cả 3 cây B+ Tree ($BT_{DRAM}, BT_{LO}, BT_{SSD}$) và hợp nhất (merge) kết quả trả về cho người dùng.
+    
+    \item \textbf{Hỏi:} Thành quả tổng kết của bài báo về mặt write amplification của ZipCache so với CacheLib là gì? \\
+    \textbf{Đáp:} Nhờ các kỹ thuật tối ưu, ZipCache giảm write amplification tới 26.2 lần so với CacheLib, bảo vệ tối đa tuổi thọ flash NAND của SSD.
+\end{enumerate}
+
+\newpage
+\section{Bài 2: SSDAlloc - Quản lý bộ nhớ lai SSD/RAM dễ dàng}
+
+\subsection{Tóm tắt kiến thức cốt lõi}
+
+\textbf{1. Bối cảnh và Động lực:}
+\begin{itemize}
+    \item Các hệ thống mạng, cơ sở dữ liệu in-memory, key-value store hiện đại đòi hỏi dung lượng RAM khổng lồ để đạt hiệu năng cao. Tuy nhiên, giá thành và lượng điện tiêu thụ của RAM tăng theo cấp số nhân khi vượt quá giới hạn dung lượng của một máy chủ thông thường.
+    \item Bộ nhớ Flash (SSD) rẻ hơn nhiều, dung lượng lớn, tiêu thụ ít điện năng và có tốc độ đọc ngẫu nhiên (random read) cực tốt, trở thành ứng cử viên sáng giá để "mở rộng" RAM (DRAM/SSD hybrid).
+    \item \textbf{Vấn đề:} Việc dùng SSD làm RAM mở rộng thông qua Swap của hệ điều hành (OS Swap) có hiệu suất rất tệ do Swap hoạt động ở mức trang (Page-granularity - thường là 4KB), gây ra hiện tượng khuếch đại ghi (write escalation), làm giảm tốc độ và tuổi thọ SSD. Ngược lại, việc lập trình lại toàn bộ ứng dụng để tối ưu cho SSD thì tốn quá nhiều công sức phát triển.
+\end{itemize}
+
+\textbf{2. Giải pháp SSDAlloc:}
+\begin{itemize}
+    \item SSDAlloc là một trình quản lý bộ nhớ lai DRAM/flash và bộ thư viện runtime, cho phép ứng dụng sử dụng SSD như RAM một cách trong suốt (transparent).
+    \item Thay vì phải viết lại ứng dụng, lập trình viên chỉ cần thay thế các hàm cấp phát bộ nhớ (như \texttt{malloc}) bằng API của SSDAlloc (\texttt{ssd\_malloc}, \texttt{ssd\_oalloc}).
+    \item SSDAlloc "đánh lừa" ứng dụng bằng giao diện Virtual Memory (bộ nhớ ảo) cấp trang, nhưng bên dưới nội bộ lại quản lý dữ liệu lưu xuống SSD ở \textbf{mức độ đối tượng (object-granularity)} để tăng hiệu suất và tuổi thọ SSD.
+\end{itemize}
+
+\textbf{3. Thiết kế kiến trúc cốt lõi:}
+\begin{itemize}
+    \item \textbf{Mô hình OPP (Object Per Page):} SSDAlloc cấp phát mỗi đối tượng ứng dụng lên một trang bộ nhớ ảo (virtual memory page) riêng biệt. Dù cách này có vẻ lãng phí bộ nhớ ảo, nhưng không gian địa chỉ ảo 64-bit là vô cùng dồi dào (hỗ trợ tới 256TB).
+    \item \textbf{Quản lý bộ nhớ vật lý (DRAM):}
+    \begin{itemize}
+        \item DRAM không lãng phí theo trang. Phần lớn DRAM được dùng làm \textbf{RAM Object Cache} chứa các đối tượng cực kỳ chặt chẽ (compact) theo thuật toán LRU.
+        \item Một phần rất nhỏ DRAM dùng làm \textbf{Page Buffer} chứa các trang vật lý thực sự đang được ứng dụng thao tác trực tiếp (bắt lỗi Page Fault để tải từ Cache/SSD lên Page Buffer).
+    \end{itemize}
+    \item \textbf{Quản lý SSD (Log-structured Object Store):}
+    \begin{itemize}
+        \item SSDAlloc không ghi đè dữ liệu trực tiếp. Nó ghi dữ liệu bẩn (dirty objects) xuống SSD theo cấu trúc Log-structured (tuần tự), giúp tối ưu hóa hiệu suất ghi và tránh \textit{random writes} trên SSD.
+        \item Sử dụng \textbf{Object Table} (tương tự Page Table) chứa trong RAM để tra cứu địa chỉ thực tế của object trên SSD. Khi vị trí log trên SSD thay đổi, Object Table sẽ được cập nhật.
+    \end{itemize}
+    \item \textbf{Garbage Collection (Dọn rác):} Vì SSD ghi log tuần tự, các vùng dữ liệu cũ trở thành rác. SSDAlloc tích hợp bộ Garbage Collector nền tảng "read-modify-write" để dọn dẹp các block SSD, lấy lại không gian mà không gặp rào cản trễ tìm kiếm (seek delay) như ổ đĩa cơ HDD.
+\end{itemize}
+
+\textbf{4. Tính năng Durability (Bền bỉ):}
+SSDAlloc có framework Checkpointing, cho phép lưu toàn bộ trạng thái của Object Table và dữ liệu xuống SSD để giữ nguyên hiện trạng ứng dụng sau khi khởi động lại máy (reboot), tránh mất dữ liệu.
+
+\textbf{5. Hiệu năng đạt được:}
+\begin{itemize}
+    \item Cải thiện thông lượng lên tới 17.4 lần so với OS Swap truyền thống.
+    \item Viết dữ liệu xuống SSD ít hơn 31.2 lần (giảm write traffic), đồng nghĩa với việc tăng tuổi thọ SSD lên 30 lần.
+    \item Sửa đổi mã nguồn cực ít (ví dụ Memcached chỉ sửa 21 dòng code trên tổng số hơn 11,000 dòng).
+\end{itemize}
+
+\subsection{Câu hỏi vấn đáp (Q\&A) gợi ý}
+
+\begin{enumerate}
+    \item \textbf{Hỏi:} Mục tiêu chính mà hệ thống SSDAlloc hướng tới là gì? \\
+    \textbf{Đáp:} Cho phép các ứng dụng mở rộng dung lượng RAM bằng ổ SSD một cách dễ dàng, hiệu năng cao và ít phải sửa đổi mã nguồn.
+    
+    \item \textbf{Hỏi:} Hạn chế của việc sử dụng Swap của hệ điều hành (OS Swap) trên ổ SSD là gì? \\
+    \textbf{Đáp:} OS Swap hoạt động ở mức trang (Page-granularity, vd 4KB). Việc đọc/ghi một đối tượng nhỏ cũng kéo theo đọc/ghi cả trang 4KB, gây ra khuếch đại ghi (write escalation), làm chậm và giảm tuổi thọ SSD.
+    
+    \item \textbf{Hỏi:} Giải pháp thay thế việc dùng OS Swap là viết lại toàn bộ ứng dụng (Application Rewrite). Tại sao SSDAlloc không chọn cách này? \\
+    \textbf{Đáp:} Viết lại ứng dụng tốn quá nhiều chi phí và nhân lực phát triển, đòi hỏi am hiểu sâu về ứng dụng cũng như cách hoạt động của Flash/SSD.
+    
+    \item \textbf{Hỏi:} SSDAlloc hoạt động ở mức độ chi tiết (granularity) nào khi giao tiếp với SSD? \\
+    \textbf{Đáp:} SSDAlloc hoạt động ở \textbf{mức độ đối tượng (object-granularity)}, nó chỉ ghi đúng kích thước của đối tượng cần lưu thay vì ghi cả trang 4KB.
+    
+    \item \textbf{Hỏi:} SSDAlloc yêu cầu lập trình viên phải thay đổi gì trong mã nguồn? \\
+    \textbf{Đáp:} Rất nhỏ, chỉ cần thay thế các hàm cấp phát bộ nhớ chuẩn của C/C++ (như \texttt{malloc}, \texttt{calloc}, \texttt{free}) bằng API của SSDAlloc.
+    
+    \item \textbf{Hỏi:} Mô hình OPP (Object Per Page) trong SSDAlloc là gì? \\
+    \textbf{Đáp:} Mỗi khi ứng dụng xin cấp phát bộ nhớ cho một đối tượng, SSDAlloc sẽ cấp hẳn một trang bộ nhớ ảo (virtual memory page) riêng biệt cho đối tượng đó.
+    
+    \item \textbf{Hỏi:} OPP có gây lãng phí bộ nhớ không? \\
+    \textbf{Đáp:} Nó lãng phí \textbf{không gian địa chỉ ảo (virtual address space)} vốn dĩ rất dư thừa ở các hệ thống 64-bit, nhưng KHÔNG lãng phí \textbf{bộ nhớ vật lý (RAM)} nhờ cách quản lý thông minh của SSDAlloc.
+    
+    \item \textbf{Hỏi:} DRAM trong kiến trúc của SSDAlloc được chia thành những phần chính nào? \\
+    \textbf{Đáp:} Hai phần: \textbf{Page Buffer} (dung lượng rất nhỏ, giữ trang vật lý) và \textbf{RAM Object Cache} (chiếm phần lớn RAM, chứa các đối tượng nén gọn).
+    
+    \item \textbf{Hỏi:} Page Buffer trong SSDAlloc đóng vai trò gì? \\
+    \textbf{Đáp:} Khi ứng dụng cố truy cập một đối tượng, SSDAlloc "bắt" lỗi page fault, sau đó tải đối tượng từ RAM Cache hoặc SSD vào một trang vật lý thực thụ trên Page Buffer để ứng dụng dùng.
+    
+    \item \textbf{Hỏi:} SSDAlloc ghi dữ liệu xuống ổ cứng SSD theo mô hình nào? \\
+    \textbf{Đáp:} Mô hình \textbf{Log-structured} (Cấu trúc ghi tuần tự nhật ký).
+    
+    \item \textbf{Hỏi:} Tại sao Log-structured lại quan trọng đối với SSD? \\
+    \textbf{Đáp:} Vì SSD xử lý ghi ngẫu nhiên (random writes) rất kém và gây mài mòn. Việc gom các đối tượng dirty lại và ghi tuần tự thành log lớn sẽ tối ưu tốc độ ghi và kéo dài tuổi thọ SSD.
+    
+    \item \textbf{Hỏi:} Làm sao SSDAlloc biết được một đối tượng hiện đang nằm ở block vật lý nào trên SSD (vì log-structured luôn thay đổi vị trí ghi)? \\
+    \textbf{Đáp:} Sử dụng cấu trúc dữ liệu tên là \textbf{Object Table} (lưu trong RAM), đóng vai trò như bảng tra cứu ánh xạ địa chỉ.
+    
+    \item \textbf{Hỏi:} Object Table lưu trữ thông tin gì? \\
+    \textbf{Đáp:} Lưu vị trí thực tế trên SSD của một đối tượng, dựa trên thông tin định danh OTID và OTO (Object Table Offset).
+    
+    \item \textbf{Hỏi:} Quá trình Garbage Collection (dọn rác) của SSDAlloc diễn ra như thế nào? \\
+    \textbf{Đáp:} Khi RAM đẩy dữ liệu bẩn xuống SSD, bộ GC sẽ đọc các block cũ, giữ lại các object còn sống (live objects), dồn chúng lại (pack) và ghi ra đầu log mới, rồi xóa block cũ.
+    
+    \item \textbf{Hỏi:} Checkpointing trong SSDAlloc cung cấp lợi ích gì? \\
+    \textbf{Đáp:} Giúp duy trì tính bền bỉ (durability). Khi ứng dụng tắt, nó lưu Object Table và các đối tượng đang chờ xuống SSD để khởi động lại nhanh chóng mà không mất dữ liệu.
+    
+    \item \textbf{Hỏi:} SSDAlloc tối ưu hóa việc quản lý Object Table bằng cách nào khi xử lý các đối tượng cực nhỏ (ví dụ 4 bytes)? \\
+    \textbf{Đáp:} Dùng kỹ thuật batching, nhóm nhiều đối tượng siêu nhỏ thành một khối lớn hơn (ít nhất 128 bytes) để giảm thiểu DRAM bị lãng phí cho con trỏ Object Table.
+    
+    \item \textbf{Hỏi:} Address Translation Module (ATM) làm nhiệm vụ gì? \\
+    \textbf{Đáp:} Dịch địa chỉ bộ nhớ ảo của ứng dụng thành các định danh quản lý nội bộ (OTID, OTO) để tra cứu dữ liệu trên RAM Cache hoặc SSD.
+    
+    \item \textbf{Hỏi:} SSDAlloc cung cấp các cấp phát bộ nhớ dạng mảng (Array) liên tục qua phương pháp nào? \\
+    \textbf{Đáp:} Thông qua phương pháp MP (Memory Pages), cấp vùng không gian liền kề tương tự cách làm của malloc truyền thống, hỗ trợ mảng dữ liệu.
+    
+    \item \textbf{Hỏi:} SSDAlloc sử dụng mprotect/madvise để làm gì? \\
+    \textbf{Đáp:} Để bảo vệ không gian bộ nhớ ảo. Khi ứng dụng đọc/ghi vào trang không hợp lệ, hệ điều hành phát sinh seg-fault, SSDAlloc bắt lỗi này để xử lý tải đối tượng (demand-paging).
+    
+    \item \textbf{Hỏi:} Overhead (chi phí hiệu suất dư thừa) chính của SSDAlloc đến từ đâu? \\
+    \textbf{Đáp:} Chủ yếu từ cơ chế signal handling (bắt lỗi seg-fault) của hệ điều hành do SSDAlloc chạy hoàn toàn trên user-space (không gian người dùng).
+    
+    \item \textbf{Hỏi:} Có thể giảm overhead signal handling của SSDAlloc bằng cách nào? \\
+    \textbf{Đáp:} Đẩy logic của SSDAlloc xuống tầng kernel (hạt nhân hệ điều hành) kết hợp với VM pager của OS.
+    
+    \item \textbf{Hỏi:} Tuổi thọ SSD tăng lên đáng kể (tới 30 lần) khi dùng SSDAlloc là do yếu tố nào? \\
+    \textbf{Đáp:} Do SSDAlloc chỉ ghi đúng lượng byte thực tế bị thay đổi (object-level) thay vì ghi lại toàn bộ trang 4KB mỗi lần có thay đổi nhỏ.
+    
+    \item \textbf{Hỏi:} Nếu một ứng dụng Memcached có workload chủ yếu là thay đổi kích thước nhỏ, sử dụng SSD-swap truyền thống sẽ gặp hiện tượng gì? \\
+    \textbf{Đáp:} Gặp hiện tượng write amplification cực nặng, một lần thay đổi 100 bytes khiến OS phải ghi lại nguyên block 4KB.
+    
+    \item \textbf{Hỏi:} Kết quả benchmark Memcached dùng SSDAlloc so với SSD-swap cho thấy điều gì? \\
+    \textbf{Đáp:} Thông lượng (throughput) tăng gấp 5 lần so với SSD-swap do tận dụng được tính năng ghi gom nhóm.
+    
+    \item \textbf{Hỏi:} Ứng dụng B+ Tree khi tích hợp SSDAlloc thông qua thay thế "malloc" sẽ có hành vi cấp phát như thế nào? \\
+    \textbf{Đáp:} Các node của cây sẽ được cấp phát qua mô hình OPP. Khi cần lấy một node, hệ thống sẽ tải đúng đối tượng đó từ SSD, tránh tải cả trang vô ích.
+    
+    \item \textbf{Hỏi:} Trong các thực nghiệm, ứng dụng nào của phần trình bày tốn công sửa mã nguồn nhất? \\
+    \textbf{Đáp:} Ngay cả với ứng dụng HashCache phức tạp, cũng chỉ cần sửa chưa tới 30 dòng code (thay malloc/free) để thích hợp hoàn toàn với SSDAlloc.
+    
+    \item \textbf{Hỏi:} HashCache benchmark chứng minh lợi thế gì của OPP? \\
+    \textbf{Đáp:} Chứng minh khả năng giữ được bộ working set rất lớn trong bộ nhớ RAM nhờ lưu trữ đối tượng chặt chẽ (compact cache) so với cấp phát mức trang lãng phí.
+    
+    \item \textbf{Hỏi:} Việc chuyển đổi từ \texttt{malloc} sang \texttt{ssd\_oalloc} trong các ứng dụng đem lại rủi ro gì về bộ nhớ? \\
+    \textbf{Đáp:} Vì viết bằng ngôn ngữ thấp như C, lập trình viên vẫn phải tự chịu trách nhiệm giải phóng bộ nhớ (tránh memory leaks) qua \texttt{ssd\_free}.
+    
+    \item \textbf{Hỏi:} SSDAlloc quản lý object pool (bể đối tượng) như thế nào để giảm phân mảnh? \\
+    \textbf{Đáp:} SSDAlloc cung cấp object pool cho từng khoảng kích thước riêng biệt (ví dụ <0.5KB chung một pool, từ 0.5KB đến 1KB một pool).
+    
+    \item \textbf{Hỏi:} Tính song song (parallelism) của SSD hiện đại được khai thác trong SSDAlloc ra sao? \\
+    \textbf{Đáp:} SSDAlloc thiết kế các hàm thread-safe, cho phép gửi nhiều I/O request cùng lúc để tối đa hóa băng thông của các ổ SSD high-end có chip nhớ song song.
+\end{enumerate}
+
+\newpage
+\section{Bài 3: Fetch Me If You Can - Đánh giá độ tin cậy của Prefetching trên CPU}
+
+\subsection{Tóm tắt kiến thức cốt lõi}
+
+\textbf{1. Bối cảnh và Động lực:}
+\begin{itemize}
+    \item Hệ thống cơ sở dữ liệu in-memory thường chịu tổn thất độ trễ lớn khi truy cập bộ nhớ không tuần tự (ví dụ: tìm kiếm B+ Tree, Hash table). Độ trễ này ngày càng tăng khi kiến trúc bộ nhớ thay đổi (kết nối qua CXL, NVLink, bộ nhớ NUMA trên socket khác).
+    \item \textbf{Software Prefetching (Tìm nạp trước bằng phần mềm):} Là kỹ thuật lập trình chèn các lệnh "gợi ý" (hint) để CPU tải dữ liệu từ RAM lên bộ nhớ đệm (Cache L1/L2/L3) trước khi tiến trình thực sự cần dùng đến, giúp che giấu độ trễ truy cập bộ nhớ.
+    \item \textbf{Vấn đề:} Tài liệu từ các nhà sản xuất CPU thường rất mơ hồ về cách CPU xử lý các lệnh prefetch. Cụ thể, không rõ CPU sẽ đặt dữ liệu vào tầng Cache nào và CPU sẽ phản ứng ra sao khi bị quá tải lệnh prefetch. Bài báo giải quyết vấn đề này bằng cách tạo ra các microbenchmark để phân tích đặc tính của 7 loại CPU khác nhau (x86 và ARM).
+\end{itemize}
+
+\textbf{2. Kiến trúc và Các đặc tính Prefetching (Prefetch Localities):}
+\begin{itemize}
+    \item \textbf{Translation Lookaside Buffer (TLB) \& Fill Buffer (FB):} Khi lệnh prefetch được gọi, địa chỉ ảo được dịch thành địa chỉ vật lý. Nếu dữ liệu không có ở L1 Cache, CPU đưa yêu cầu vào Fill Buffer (FB). Kích thước FB giới hạn số lượng yêu cầu bộ nhớ có thể xử lý song song.
+    \item Các lệnh prefetch có cờ (hint) vị trí khác nhau như \texttt{T0}, \texttt{T1}, \texttt{T2}, và \texttt{NTA} (Non-Temporal Access). 
+    \item Bài báo chỉ ra rằng hành vi thực tế khác nhau tùy CPU. NTA thường được đưa vào L1 và sớm bị đuổi (evicted) vì CPU coi đó là dữ liệu không tái sử dụng.
+\end{itemize}
+
+\textbf{3. Độ tin cậy của Prefetching (Prefetching Reliability):}
+Đóng góp quan trọng nhất của bài báo là định nghĩa và đo lường "Độ tin cậy" khi Fill Buffer (FB) bị đầy:
+\begin{itemize}
+    \item \textbf{Weak Reliability (Độ tin cậy yếu):} Nếu FB đầy, CPU sẽ \textit{vứt bỏ (drop)} lệnh prefetch mới. Ví dụ: Các dòng CPU AMD EPYC, NVIDIA Grace.
+    \item \textbf{Strong Reliability (Độ tin cậy mạnh):} Nếu FB đầy, CPU sẽ \textit{tạm dừng (stall)} cho đến khi có chỗ trống trong FB để nạp lệnh prefetch. Ví dụ: Các dòng CPU Intel Xeon.
+\end{itemize}
+
+\textbf{4. Đánh giá Hiệu năng trong Database Workloads:}
+Bài báo thử nghiệm prefetching thông qua kỹ thuật \textbf{Coroutines} để duyệt B+ Tree và Binary Search:
+\begin{itemize}
+    \item Nhìn chung, Prefetching mang lại tốc độ tăng tốc (speedup) từ 1.3x đến 2.6x cho B+ Tree, và 1.9x đến 2.8x cho Binary Search khi dữ liệu nằm ở bộ nhớ xa (remote memory).
+    \item \textbf{Tác dụng phụ của Strong Reliability:} Khi đọc các node B+ Tree kích thước lớn (VD: 8KB, vượt xa sức chứa của FB), hệ thống \textit{Strong Reliability} sẽ bị đình trệ nghiêm trọng (slowdown tới 2.5x) do CPU cố gắng prefetch toàn bộ node mà không thể tiếp tục công việc khác.
+    \item Ngược lại, \textit{Weak Reliability} mang lại hiệu suất tốt hơn (tăng 2x) trong trường hợp này vì nó bỏ qua các lệnh prefetch bị nghẽn, chỉ tải những phần vừa đủ năng lực của CPU.
+\end{itemize}
+
+\textbf{5. Lời khuyên cho lập trình viên:}
+Giới hạn số lượng prefetch đầu cơ (speculative) sao cho bằng với kích thước của FB trên các hệ thống Strong Reliability để tránh CPU stall vô ích. Ưu tiên sử dụng lệnh \texttt{T0} và \texttt{NTA} vì chúng có hành vi đồng nhất nhất trên các kiến trúc.
+
+\subsection{Câu hỏi vấn đáp (Q\&A) gợi ý}
+
+\begin{enumerate}
+    \item \textbf{Hỏi:} Mục đích của kỹ thuật "Software prefetching" là gì? \\
+    \textbf{Đáp:} Để che giấu độ trễ truy cập bộ nhớ bằng cách tải dữ liệu từ RAM lên bộ nhớ đệm (Cache) của CPU trước khi dữ liệu đó thực sự được tiến trình sử dụng.
+    
+    \item \textbf{Hỏi:} Khi một lệnh prefetch được thực thi, thao tác đầu tiên CPU làm là gì? \\
+    \textbf{Đáp:} Dịch địa chỉ ảo sang địa chỉ vật lý (có thể gây ra lỗi miss TLB).
+    
+    \item \textbf{Hỏi:} Fill Buffer (FB) đóng vai trò gì trong quá trình prefetching? \\
+    \textbf{Đáp:} Nằm giữa L1 và L2 Cache, FB lưu trữ và theo dõi các yêu cầu bộ nhớ chưa hoàn thành (cache misses). Kích thước của FB quyết định số lượng yêu cầu I/O có thể xử lý song song.
+    
+    \item \textbf{Hỏi:} Tại sao các lệnh prefetch chỉ được coi là "hints" (lời gợi ý)? \\
+    \textbf{Đáp:} Vì CPU có quyền bỏ qua hoặc thực thi nó tuỳ theo trạng thái tài nguyên phần cứng hiện tại mà không làm thay đổi logic hoạt động của chương trình.
+    
+    \item \textbf{Hỏi:} Cờ \texttt{NTA} (Non-Temporal Access) báo cho CPU điều gì? \\
+    \textbf{Đáp:} Báo hiệu rằng dữ liệu này sẽ chỉ được sử dụng một lần (không có tính locality thời gian), do đó CPU nên đuổi (evict) nó ra khỏi cache sớm để nhường chỗ cho dữ liệu khác.
+    
+    \item \textbf{Hỏi:} Sự khác biệt về định nghĩa giữa "Weak prefetching reliability" và "Strong prefetching reliability" là gì? \\
+    \textbf{Đáp:} Weak là CPU vứt bỏ lệnh prefetch khi Fill Buffer đầy; Strong là CPU sẽ tạm dừng (stall) hoạt động để chờ có chỗ trống trong Fill Buffer rồi mới thực hiện prefetch.
+    
+    \item \textbf{Hỏi:} Dòng CPU nào trong bài báo đại diện cho tính chất "Strong reliability"? \\
+    \textbf{Đáp:} Các vi xử lý Intel Xeon.
+    
+    \item \textbf{Hỏi:} Dòng CPU nào đại diện cho tính chất "Weak reliability"? \\
+    \textbf{Đáp:} AMD EPYC và NVIDIA Grace.
+    
+    \item \textbf{Hỏi:} Coroutines được sử dụng trong bài báo nhằm mục đích gì? \\
+    \textbf{Đáp:} Dùng để hiện thực hóa việc đan xen các luồng lệnh (instruction stream interleaving). Khi một luồng chờ dữ liệu prefetch, coroutine sẽ tạm dừng (suspend) và chuyển sang thực thi một coroutine khác để tránh CPU bị nhàn rỗi.
+    
+    \item \textbf{Hỏi:} Phương pháp nào bài báo dùng để xác định vị trí dữ liệu trong bộ nhớ đệm sau khi prefetch (Cache Locality)? \\
+    \textbf{Đáp:} Tạo một mảng con trỏ nhảy ngẫu nhiên, thực hiện prefetch, sau đó đo lường độ trễ truy cập thực tế và đối chiếu với các ngưỡng độ trễ tham chiếu của L1, L2, L3 Cache.
+    
+    \item \textbf{Hỏi:} Bài báo làm cách nào để buộc CPU lộ ra tính năng Reliability (đo kích thước Fill Buffer)? \\
+    \textbf{Đáp:} Đẩy một lượng lớn lệnh prefetch vượt quá khả năng của FB, rồi đo lường thời gian thực thi lệnh prefetch và thời gian truy cập thực tế sau đó.
+    
+    \item \textbf{Hỏi:} "Remote memory" trong ngữ cảnh của bài báo đề cập đến loại phần cứng nào? \\
+    \textbf{Đáp:} Đề cập đến bộ nhớ RAM nằm ở một vi xử lý (socket) khác trong hệ thống đa CPU, hoặc RAM của GPU giao tiếp qua NVLink.
+    
+    \item \textbf{Hỏi:} Đối với cấu trúc B+ Tree, việc "Strong reliability" có thể gây ra hiện tượng giảm hiệu năng (slowdown) trong trường hợp nào? \\
+    \textbf{Đáp:} Khi prefetch một Node kích thước rất lớn (như 8KB), vượt quá số lượng slot của Fill Buffer, CPU sẽ bị đình trệ (stall) để cố nạp hết dữ liệu mà không làm việc khác được.
+    
+    \item \textbf{Hỏi:} Tại sao "Weak reliability" lại hoạt động tốt hơn khi prefetch Node B+ Tree 8KB? \\
+    \textbf{Đáp:} Vì nó sẽ tải một phần dữ liệu (vừa đủ lấp đầy FB) rồi vứt bỏ các lệnh prefetch thừa, giúp CPU vẫn lấy được phần đầu của Node (chứa Header, dễ trúng đích) mà không bị stall.
+    
+    \item \textbf{Hỏi:} Khuyên dùng cờ (hint) locality nào để hành vi của phần mềm nhất quán nhất trên các CPU khác nhau? \\
+    \textbf{Đáp:} Cờ \texttt{T0} và \texttt{NTA}.
+    
+    \item \textbf{Hỏi:} Tại sao việc phát lệnh prefetch "sớm quá" hoặc "muộn quá" đều không mang lại hiệu quả? \\
+    \textbf{Đáp:} Sớm quá thì dữ liệu bị đuổi khỏi cache trước khi kịp dùng; Muộn quá thì dữ liệu chưa kịp tải xong vào cache khi tiến trình cần đến (vẫn phải đợi).
+    
+    \item \textbf{Hỏi:} Tính năng Transparent Huge Pages (THP) được bật trong các bài test nhằm mục đích gì? \\
+    \textbf{Đáp:} Để sử dụng các trang bộ nhớ lớn (ví dụ 2MB thay vì 4KB), nhằm hạn chế tối đa các lỗi miss TLB làm nhiễu kết quả đo lường độ trễ.
+    
+    \item \textbf{Hỏi:} Số lượng slot của Fill Buffer thường rơi vào khoảng bao nhiêu trên các CPU được thử nghiệm? \\
+    \textbf{Đáp:} Thường dao động từ 10 đến 24 slots.
+    
+    \item \textbf{Hỏi:} "Memory Level Parallelism" (MLP) là gì? \\
+    \textbf{Đáp:} Là khả năng của CPU xử lý song song nhiều yêu cầu truy xuất bộ nhớ cùng một lúc, thường bị giới hạn bởi kích thước Fill Buffer.
+    
+    \item \textbf{Hỏi:} Bài báo chia thuật toán truy xuất Coroutine B+ Tree thành hai hạt độ (granularity) nào? \\
+    \textbf{Đáp:} "Coro Full Node" (prefetch toàn bộ node) và "Coro Half Node" (chỉ prefetch phần header và các keys đầu tiên).
+    
+    \item \textbf{Hỏi:} Tại sao ở Node 8KB, "Coro Full Node" lại có số lượng bộ đếm L1 miss tăng vọt trên hệ thống Intel? \\
+    \textbf{Đáp:} Do Node 8KB yêu cầu tới 128 cache lines, vượt xa số slot FB (khoảng 12). Hệ thống Strong Reliability cố gắng fetch hết nên làm tràn cache/buffer và gây stall.
+    
+    \item \textbf{Hỏi:} Đối với cấu trúc Binary Search, tốc độ gia tăng (speedup) chủ yếu đến từ yếu tố nào? \\
+    \textbf{Đáp:} Che giấu độ trễ truy xuất trên từng bước nhảy xa của mảng nhị phân, đặc biệt khi dữ liệu nằm ở Remote Memory có độ trễ lớn.
+    
+    \item \textbf{Hỏi:} Yếu tố "Zipf distribution" (phân phối Zipf) trong bài test Binary Search ảnh hưởng thế nào đến kết quả? \\
+    \textbf{Đáp:} Zipf distribution mô phỏng dữ liệu bị "nghiêng" (skewed - một số phần tử được truy xuất rất nhiều). Skew càng cao, cache hit tự nhiên càng cao, do đó hiệu quả của prefetching giảm đi.
+    
+    \item \textbf{Hỏi:} Với CPU A64FX (siêu máy tính Fugaku), điểm đặc biệt về kiến trúc Cache của nó là gì? \\
+    \textbf{Đáp:} Nó không có L3 Cache, và bộ nhớ là loại HBM2 (High Bandwidth Memory) tốc độ cực cao, ngoài ra độ tin cậy của prefetching có thể cấu hình được.
+    
+    \item \textbf{Hỏi:} Lời khuyên "Sắp xếp thứ tự các lệnh prefetch đầu cơ theo mức độ ưu tiên" xuất phát từ lý do gì? \\
+    \textbf{Đáp:} Vì trên các hệ thống Weak Reliability, khi FB đầy các lệnh phát sau sẽ bị vứt bỏ. Lệnh quan trọng phát trước sẽ có tỷ lệ được nạp thành công cao hơn.
+    
+    \item \textbf{Hỏi:} Tại sao các tác giả không sử dụng kỹ thuật "State Machine" thay cho Coroutine dù State Machine có thể nhanh hơn? \\
+    \textbf{Đáp:} Mặc dù State Machine hiệu năng cao nhưng mã nguồn cực kỳ phức tạp và khó bảo trì (tốn nhiều dòng code hơn), trong khi Coroutine dễ viết và hiệu năng vẫn rất tốt.
+    
+    \item \textbf{Hỏi:} Trong thí nghiệm Binary Search, khi phân phối rất nghiêng (Zipf parameter lớn), Coroutine prefetching gây ra hiện tượng gì? \\
+    \textbf{Đáp:} Gây giảm hiệu năng (degradation) do overhead của việc chuyển đổi (context switch) giữa các coroutines lớn hơn lợi ích tiết kiệm thời gian chờ bộ nhớ.
+    
+    \item \textbf{Hỏi:} Sự phụ thuộc dữ liệu (data dependency) được nhóm tác giả dùng trong bài test Reliability như thế nào? \\
+    \textbf{Đáp:} Bằng cách buộc địa chỉ truy cập tiếp theo phụ thuộc vào giá trị đọc được từ địa chỉ trước đó, khiến CPU không thể xử lý song song các memory load, bộc lộ rõ tình trạng của Fill Buffer.
+    
+    \item \textbf{Hỏi:} Công nghệ kết nối CXL trong tương lai sẽ làm tăng hay giảm tầm quan trọng của Software Prefetching? \\
+    \textbf{Đáp:} Sẽ làm tăng tầm quan trọng, vì CXL mở rộng bộ nhớ nhưng lại làm tăng độ trễ truy cập, biến prefetching thành một giải pháp thiết yếu.
+    
+    \item \textbf{Hỏi:} Đâu là bài học cho các kỹ sư lập trình cơ sở dữ liệu in-memory từ bài báo này? \\
+    \textbf{Đáp:} Không phải cứ prefetch càng nhiều càng tốt. Phải hiểu rõ kích thước dữ liệu so với FB và đặc tính Reliability của CPU đang chạy để điều chỉnh lượng prefetch thích hợp.
+\end{enumerate}
+
+\newpage
+\section{Bài 4: The Case for Compressed Caching - Bộ nhớ đệm nén trong hệ thống Virtual Memory}
+
+\subsection{Tóm tắt kiến thức cốt lõi}
+
+\textbf{1. Bối cảnh và Động lực:}
+\begin{itemize}
+    \item Sự chênh lệch tốc độ giữa CPU và ổ cứng (Disk) là cực kỳ lớn. Trong khi tốc độ CPU tăng gấp đôi sau mỗi 18 tháng, thì độ trễ của ổ cứng (seek time) cải thiện rất chậm (chênh lệch tới 5-6 bậc độ lớn). Khi hệ thống thiếu RAM và phải dùng đến không gian Swap trên ổ cứng (paging), hiệu năng sẽ tụt dốc thảm hại.
+    \item \textbf{Compressed Caching (Bộ nhớ đệm nén):} Là ý tưởng sử dụng một phần RAM để lưu trữ các trang dữ liệu (pages) dưới dạng đã nén. Hệ thống này tạo ra một "tầng" mới giữa RAM chưa nén và ổ cứng Disk. Thay vì đọc/ghi xuống ổ cứng chậm chạp, CPU sẽ giải nén dữ liệu trực tiếp từ vùng RAM nén.
+    \item \textbf{Vấn đề:} Các nghiên cứu trước đây (như của Douglis) cho kết quả rất thất vọng: một số chương trình chạy nhanh hơn nhưng nhiều chương trình lại chạy chậm đi. Bài báo chỉ ra rằng nguyên nhân là do họ dùng \textit{các CPU đời cũ quá chậm} (làm thời gian nén/giải nén lâu hơn cả thời gian lợi được từ ổ đĩa) và \textit{chính sách quản lý bộ đệm kém}.
+\end{itemize}
+
+\textbf{2. Hai cải tiến mang tính đột phá của Bài báo:}
+\begin{itemize}
+    \item \textbf{Thuật toán nén chuyên dụng (WKdm):} 
+    Thay vì dùng các thuật toán nén chuỗi truyền thống (LZ) vốn chỉ thiết kế cho file văn bản, nhóm tác giả tạo ra thuật toán WKdm chuyên trị dữ liệu in-memory (con trỏ, số nguyên). Nó cực kỳ nhanh và nhẹ.
+    \item \textbf{Kích thước Cache thích ứng (Adaptive Cache Sizing):} 
+    Dành bao nhiêu RAM để nén là một bài toán khó. Nén quá nhiều gây lãng phí CPU, nén quá ít thì vẫn bị lỗi page fault. Bài báo dùng một cơ chế "Cost/Benefit Analysis" (Phân tích Chi phí/Lợi ích) trực tuyến để tự động điều chỉnh kích thước vùng RAM nén tuỳ theo ứng dụng đang chạy.
+\end{itemize}
+
+\textbf{3. Thuật toán Nén WKdm:}
+\begin{itemize}
+    \item \textbf{Đặc điểm dữ liệu trong RAM:} Dữ liệu trong RAM thường là các cấu trúc dữ liệu, có tính chất "căn lề theo từ" (word-aligned), chứa nhiều số nguyên nhỏ (phần lớn là số 0 ở các bit cao) hoặc các con trỏ (pointers) trỏ đến các vùng nhớ gần nhau.
+    \item WKdm quét dữ liệu theo từng \textit{word (32-bit)}. Nó sử dụng một từ điển (dictionary) siêu nhỏ chỉ có \textbf{16 từ} (so với 64KB của LZ).
+    \item \textbf{Matching một phần (Partial Matching):} WKdm kiểm tra xem 22-bits cao của word có giống với dữ liệu trong từ điển không (bỏ qua 10-bits thấp). Cách này bắt được sự tương đồng của các con trỏ trỏ đến cùng một vùng nhớ.
+\end{itemize}
+
+\textbf{4. Thích ứng kích thước Cache (Adaptive Sizing):}
+\begin{itemize}
+    \item Thuật toán theo dõi "độ mới" (recency - theo danh sách LRU) của các trang dữ liệu kể cả khi chúng đã bị đuổi (evicted).
+    \item Từ đó, hệ thống ước tính được: "Nếu ta tăng vùng RAM nén lên kích thước X, ta sẽ đỡ được bao nhiêu lần đọc ổ đĩa?". Nếu lợi ích (thời gian đỡ đọc đĩa) lớn hơn chi phí (thời gian bỏ ra để nén), hệ thống sẽ tăng kích thước vùng nén.
+    \item Số liệu thống kê được làm "mờ" (decay) theo thời gian để thích ứng kịp thời với các phase chuyển đổi của chương trình (program phases).
+\end{itemize}
+
+\textbf{5. Hiệu năng đạt được:}
+Qua giả lập chi tiết:
+\begin{itemize}
+    \item Việc sử dụng Compressed Caching giảm thời gian paging từ 30\% đến 70\% cho hầu hết các phần mềm.
+    \item Thuật toán WKdm cho tốc độ nén cực nhanh (vượt trội hơn LZRW1 của các nghiên cứu trước đó), giúp Compressed Caching hiệu quả ngay cả trên các hệ thống có ổ cứng SSD nhanh (giả định disk access 2.5ms).
+    \item Càng về tương lai (CPU càng nhanh), lợi ích của Compressed Caching càng lớn.
+\end{itemize}
+
+\subsection{Câu hỏi vấn đáp (Q\&A) gợi ý}
+
+\begin{enumerate}
+    \item \textbf{Hỏi:} Ý tưởng cốt lõi của "Compressed Caching" là gì? \\
+    \textbf{Đáp:} Sử dụng một phần của RAM để lưu trữ dữ liệu dưới dạng bị nén, tạo thành một tầng trung gian giữa RAM thông thường và ổ cứng.
+    
+    \item \textbf{Hỏi:} Vấn đề lớn nhất của bộ nhớ ảo (Virtual Memory) khi hết RAM là gì? \\
+    \textbf{Đáp:} Hệ thống phải lưu trữ trang nhớ (paging) xuống ổ đĩa, gây ra lỗi page fault có độ trễ lớn hơn gấp hàng trăm ngàn lần so với đọc RAM.
+    
+    \item \textbf{Hỏi:} Tại sao các nghiên cứu trước (như của Douglis) kết luận rằng Compressed Caching không mang lại hiệu quả đồng nhất? \\
+    \textbf{Đáp:} Vì vào thời điểm đó, vi xử lý (CPU) còn quá chậm. Thời gian CPU bỏ ra để nén và giải nén xấp xỉ bằng hoặc lớn hơn thời gian lấy dữ liệu từ ổ cứng.
+    
+    \item \textbf{Hỏi:} Tại sao bài báo khẳng định "Compressed Caching" là ý tưởng ngày càng hấp dẫn trong tương lai? \\
+    \textbf{Đáp:} Vì xu hướng công nghệ (Technology Trends): Tốc độ CPU tăng rất nhanh (gấp đôi sau 18 tháng) trong khi tốc độ seek của ổ cứng tăng rất chậm. Do đó, việc dùng CPU để "đổi lấy" I/O ổ đĩa ngày càng rẻ.
+    
+    \item \textbf{Hỏi:} Điểm yếu của các thuật toán nén họ Ziv-Lempel (như LZ77) khi áp dụng vào RAM là gì? \\
+    \textbf{Đáp:} Chúng được thiết kế để tìm chuỗi byte lặp lại chính xác trong văn bản/file, phải dùng từ điển lớn (chiếm nhiều tài nguyên) và thường bỏ lỡ các quy luật dữ liệu in-memory.
+    
+    \item \textbf{Hỏi:} Thuật toán WKdm trong bài báo khai thác đặc tính nào của dữ liệu in-memory? \\
+    \textbf{Đáp:} Dữ liệu in-memory thường căn lề theo word (word-aligned), chứa nhiều số nguyên có giá trị nhỏ (nhiều bit 0) và các con trỏ trỏ vào các vùng địa chỉ gần nhau.
+    
+    \item \textbf{Hỏi:} Thay vì quét từng byte, thuật toán WKdm quét dữ liệu theo đơn vị nào? \\
+    \textbf{Đáp:} Theo từng từ máy (Word - 32 bits).
+    
+    \item \textbf{Hỏi:} Cơ chế "Partial Matching" (khớp một phần) của thuật toán WKdm hoạt động thế nào? \\
+    \textbf{Đáp:} WKdm kiểm tra xem 22 bits cao của một word có trùng với từ điển không, mặc kệ 10 bits thấp. Việc này giúp bắt được các con trỏ trỏ tới cùng một cụm dữ liệu.
+    
+    \item \textbf{Hỏi:} Từ điển (dictionary) của thuật toán WKdm có kích thước bao nhiêu? \\
+    \textbf{Đáp:} Rất nhỏ, chỉ 16 words (khoảng 64 bytes).
+    
+    \item \textbf{Hỏi:} Bốn trạng thái phân loại của một word khi đưa vào WKdm là gì? \\
+    \textbf{Đáp:} (1) Trùng hoàn toàn chuỗi toàn số 0; (2) Trùng hoàn toàn 32-bit trong từ điển; (3) Trùng một phần 22-bit cao; (4) Không trùng (no match).
+    
+    \item \textbf{Hỏi:} Thẻ (tag) dùng để đánh dấu trạng thái từ (word) trong WKdm có độ dài bao nhiêu? \\
+    \textbf{Đáp:} Chỉ 2 bit.
+    
+    \item \textbf{Hỏi:} Bài báo giải quyết vấn đề "Nên dành bao nhiêu RAM để nén?" bằng cách nào? \\
+    \textbf{Đáp:} Sử dụng kỹ thuật Adaptive Cache Sizing dựa trên phân tích chi phí/lợi ích (Cost/Benefit Analysis) trực tuyến.
+    
+    \item \textbf{Hỏi:} Thống kê "recency" (độ mới) của các trang dữ liệu được bài báo thu thập từ đâu? \\
+    \textbf{Đáp:} Bằng cách duy trì danh sách LRU mô phỏng, ghi nhận lại cả những trang đã bị đuổi khỏi RAM (evicted pages).
+    
+    \item \textbf{Hỏi:} "Lợi ích" (Benefit) trong mô hình Cost/Benefit của bài báo được tính như thế nào? \\
+    \textbf{Đáp:} Tính bằng số lượng lỗi page fault tiết kiệm được nhân với chi phí (thời gian) truy xuất ổ đĩa.
+    
+    \item \textbf{Hỏi:} "Chi phí" (Cost) trong mô hình Cost/Benefit là gì? \\
+    \textbf{Đáp:} Tính bằng số lượng trang cần phải nén và giải nén nhân với thời gian chạy thuật toán nén/giải nén.
+    
+    \item \textbf{Hỏi:} Tại sao hệ thống Adaptive Sizing phải làm "hao mòn" (decay) số liệu thống kê theo thời gian? \\
+    \textbf{Đáp:} Để hệ thống "quên" đi các hành vi cũ và nhanh chóng thích ứng với những thay đổi (phases) mới trong luồng thực thi của chương trình.
+    
+    \item \textbf{Hỏi:} Hệ số decay (hao mòn) được thiết kế phụ thuộc vào yếu tố nào? \\
+    \textbf{Đáp:} Phụ thuộc (tỷ lệ nghịch) vào tổng dung lượng bộ nhớ vật lý. Bộ nhớ lớn thì chu kỳ thay thế dài nên decay chậm hơn.
+    
+    \item \textbf{Hỏi:} Bài báo sử dụng công cụ nào để tạo ra "vết" (trace) dữ liệu phục vụ giả lập? \\
+    \textbf{Đáp:} Công cụ VMTrace để ghi lại các thao tác truy xuất và nội dung của các trang bộ nhớ.
+    
+    \item \textbf{Hỏi:} Thuật toán WKdm nhanh hơn thuật toán nén LZRW1 (từng dùng ở nghiên cứu cũ) khoảng bao nhiêu? \\
+    \textbf{Đáp:} WKdm nhanh hơn khoảng 40\% (LZRW1 chậm hơn 20\% so với LZO, và LZO chậm hơn 20\% so với WKdm).
+    
+    \item \textbf{Hỏi:} Kết quả mô phỏng cho thấy thuật toán WKdm có tỷ lệ nén (compression ratio) ra sao? \\
+    \textbf{Đáp:} Tỷ lệ nén đạt trung bình khoảng 2:1, tương đương với các thuật toán Ziv-Lempel thông thường trên dữ liệu bộ nhớ.
+    
+    \item \textbf{Hỏi:} Giả định tốc độ ổ đĩa trong các thí nghiệm của bài báo là bao nhiêu để được coi là "bảo thủ" (conservative)? \\
+    \textbf{Đáp:} Khoảng 5ms hoặc 2.5ms thời gian tìm kiếm (seek time), vốn rất nhanh so với thời điểm viết bài báo, nhằm đảm bảo mô hình vẫn đúng trong tương lai.
+    
+    \item \textbf{Hỏi:} Đối với ứng dụng `gnuplot`, tại sao Compressed caching lại không có lợi ở dung lượng RAM nhỏ? \\
+    \textbf{Đáp:} Vì chương trình này chứa một vòng lặp quét qua khối lượng dữ liệu khổng lồ. Nếu RAM nén không đủ lớn để chứa hết vòng lặp đó, dữ liệu vẫn bị đẩy xuống ổ cứng, gây lãng phí công sức nén.
+    
+    \item \textbf{Hỏi:} Compressed caching có áp dụng để nén mã lệnh thực thi (machine code) trong bài báo không? \\
+    \textbf{Đáp:} Không, bài báo chỉ tập trung vào nén dữ liệu (data pages). Mã lệnh thực thi có các phương pháp nén tĩnh khác phù hợp hơn.
+    
+    \item \textbf{Hỏi:} So sánh giữa máy SPARC 168MHz và Pentium Pro 180MHz trong thí nghiệm, yếu tố nào ảnh hưởng mạnh đến tốc độ nén LZO? \\
+    \textbf{Đáp:} LZO chạy trên Pentium Pro cực nhanh nhờ được lập trình tay (hand-optimized) bằng Assembly của kiến trúc x86.
+    
+    \item \textbf{Hỏi:} WKdm giải quyết khâu "encoding" (mã hoá) thành mảng đầu ra như thế nào để đảm bảo tốc độ nhanh? \\
+    \textbf{Đáp:} Viết từng phần thông tin (tags, low bits, full words) vào các mảng trung gian riêng biệt, rồi gộp lại trong một bước post-processing cực nhanh.
+    
+    \item \textbf{Hỏi:} Khác biệt chính giữa "hardware compression" và giải pháp của bài báo là gì? \\
+    \textbf{Đáp:} Hardware compression nén ở mức độ rất nhỏ (từng cache-line 64B) nằm gần CPU, còn bài báo nén bằng phần mềm ở mức trang (Page 4KB) nằm trong RAM.
+    
+    \item \textbf{Hỏi:} Sự "tương đồng" của con trỏ (pointers) trong RAM được sinh ra từ đâu? \\
+    \textbf{Đáp:} Do các bộ cấp phát bộ nhớ (memory allocators) thường cấp phát các object kế tiếp nhau trong một phân vùng heap nhỏ, khiến các con trỏ có giá trị địa chỉ sát nhau (bits cao giống nhau).
+    
+    \item \textbf{Hỏi:} Có thể áp dụng WKdm bằng phần cứng được không? \\
+    \textbf{Đáp:} Rất dễ dàng, vì thuật toán cực kỳ đơn giản, từ điển chỉ 16 words ánh xạ trực tiếp (direct-mapped), tốn chi phí phần cứng siêu nhỏ.
+    
+    \item \textbf{Hỏi:} Việc nén "mù quáng" một phần trăm RAM cố định (fixed fraction) có nhược điểm gì so với Adaptive Sizing? \\
+    \textbf{Đáp:} Cố định sẽ gây phản tác dụng (chậm đi) nếu chương trình vốn đã chứa lọt trong RAM (không cần nén), hoặc gây thiếu hụt nén khi chương trình cần.
+    
+    \item \textbf{Hỏi:} Tóm lại, Compressed Caching cứu vãn hệ thống Virtual Memory ở điểm nghẽn nào? \\
+    \textbf{Đáp:} Ở điểm nghẽn I/O (Disk Bottleneck). Khi RAM hết chỗ, nén giúp nhét thêm dữ liệu vào RAM, tránh việc phải kêu gọi ổ đĩa HDD/SSD can thiệp.
+\end{enumerate}
+
+%%% END_OF_PAPER_4 %%%
+
+\end{document}
